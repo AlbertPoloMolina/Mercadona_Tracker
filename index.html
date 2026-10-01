@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Mercadona Tracker & Comparador de Precios</title>
+  <meta name="description" content="Dashboard online de historial de precios de Mercadona y comparador en tiempo real para otros supermercados (Carrefour, Lidl, Dia, Aldi).">
+  <meta name="theme-color" content="#008b53">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  
+  <link rel="stylesheet" href="css/styles.css">
+  
+  <!-- SheetJS & Chart.js con soporte local offline y fallback CDN -->
+  <script src="vendor/xlsx.full.min.js"></script>
+  <script src="vendor/chart.umd.min.js"></script>
+</head>
+<body>
+
+  <!-- HEADER PRINCIPAL -->
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="brand-wrapper" id="brand-home-btn">
+        <div class="brand-badge">🛒</div>
+        <div class="brand-text">
+          <h1>Mercadona Tracker <span class="brand-tag">PRO</span></h1>
+          <p id="header-subtitle">Historial & Comparador de Precios</p>
+        </div>
+      </div>
+
+      <!-- Navegación Escritorio -->
+      <nav class="nav-tabs" aria-label="Navegación principal">
+        <button class="nav-tab-btn active" data-view="catalog" id="nav-btn-catalog">
+          <span>📊</span> Catálogo
+        </button>
+        <button class="nav-tab-btn" data-view="comparator" id="nav-btn-comparator">
+          <span>⚡</span> Comparador en Tienda
+        </button>
+        <button class="nav-tab-btn" data-view="trends" id="nav-btn-trends">
+          <span>📈</span> Tendencias
+        </button>
+      </nav>
+
+      <!-- Acciones de Cabecera -->
+      <div class="header-actions">
+        <button class="btn-compare-quick" id="btn-quick-compare" title="Abrir comparador rápido">
+          <span>⚡</span> Comparar
+        </button>
+        <button class="btn-icon" id="theme-toggle-btn" title="Alternar modo oscuro/claro" aria-label="Cambiar tema">
+          🌙
+        </button>
+        <button class="btn-icon" id="settings-open-btn" title="Configuración y origen de datos" aria-label="Configuración">
+          ⚙️
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONTENIDO PRINCIPAL -->
+  <main class="app-container">
+
+    <!-- KPI / STATS BANNER -->
+    <section class="stats-banner" id="stats-banner" aria-label="Métricas globales">
+      <div class="stat-card">
+        <div class="stat-icon green">📦</div>
+        <div class="stat-details">
+          <span class="stat-label">Productos Únicos</span>
+          <span class="stat-value" id="stat-total-products">...</span>
+          <span class="stat-subtext" id="stat-products-subtext">Cargando base de datos...</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon blue">🧾</div>
+        <div class="stat-details">
+          <span class="stat-label">Tickets de Compra</span>
+          <span class="stat-value" id="stat-total-tickets">...</span>
+          <span class="stat-subtext" id="stat-date-range">...</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon amber">💎</div>
+        <div class="stat-details">
+          <span class="stat-label">En Mínimo Histórico</span>
+          <span class="stat-value" id="stat-at-min">...</span>
+          <span class="stat-subtext">Precios más bajos registrados</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon purple">🔺</div>
+        <div class="stat-details">
+          <span class="stat-label">Variación Media</span>
+          <span class="stat-value" id="stat-avg-inflation">...</span>
+          <span class="stat-subtext">Inflación estimada de tu cesta</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- VISTA 1: CATÁLOGO Y BUSCADOR -->
+    <section id="view-catalog" class="view-section">
+      
+      <!-- TOOLBAR DE BÚSQUEDA Y FILTROS -->
+      <div class="toolbar-section">
+        <div class="search-row">
+          <div class="search-box-wrapper">
+            <span class="search-icon">🔍</span>
+            <input 
+              type="text" 
+              class="search-input" 
+              id="product-search-input" 
+              placeholder="Buscar producto... (ej. leche, huevos, aceite, bronchales)" 
+              autocomplete="off"
+            >
+            <button class="search-clear-btn" id="search-clear-btn" aria-label="Limpiar búsqueda">✕</button>
+          </div>
+
+          <div class="sort-select-wrapper">
+            <select class="sort-select" id="sort-select" aria-label="Ordenar productos">
+              <option value="frequent-desc">🔥 Más Comprados</option>
+              <option value="recent-desc">📅 Última Compra (Reciente)</option>
+              <option value="price-asc">💶 Precio: Menor a Mayor</option>
+              <option value="price-desc">💶 Precio: Mayor a Menor</option>
+              <option value="diff-desc">📈 Mayor Subida de Precio</option>
+              <option value="name-asc">🔤 Nombre: A - Z</option>
+            </select>
+          </div>
+
+          <div class="view-mode-toggle" aria-label="Modo de vista">
+            <button class="view-mode-btn active" id="view-cards-btn" title="Vista en tarjetas">⊞</button>
+            <button class="view-mode-btn" id="view-table-btn" title="Vista en tabla">☰</button>
+          </div>
+        </div>
+
+        <!-- Chips de Categorías -->
+        <div class="categories-chips-scroll" id="categories-scroll" aria-label="Filtrar por categoría">
+          <!-- Categorías inyectadas dinámicamente -->
+        </div>
+
+        <!-- Filtros Rápidos de Estado -->
+        <div class="filter-pills-row">
+          <div class="status-pills">
+            <button class="status-pill active" data-status="all">Todos</button>
+            <button class="status-pill" data-status="frequent">★ Habituales (&ge; 5 compras)</button>
+            <button class="status-pill" data-status="up">🔺 En subida</button>
+            <button class="status-pill" data-status="down">🔻 En bajada</button>
+            <button class="status-pill" data-status="at-min">💎 Mínimo histórico</button>
+          </div>
+          <div class="results-count" id="results-count">Mostrando 0 productos</div>
+        </div>
+      </div>
+
+      <!-- Cuadrícula de Tarjetas -->
+      <div class="products-grid" id="products-grid">
+        <!-- Tarjetas inyectadas dinámicamente -->
+      </div>
+
+      <!-- Vista de Tabla Alternativa (Oculta por defecto) -->
+      <div class="products-table-wrapper" id="products-table-wrapper" style="display: none;">
+        <table class="products-table">
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th>Categoría</th>
+              <th>Último Precio</th>
+              <th>Mínimo</th>
+              <th>Máximo</th>
+              <th>Media</th>
+              <th>Compras</th>
+              <th>Fecha Última</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody id="products-table-body">
+            <!-- Filas inyectadas dinámicamente -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Estado Vacío -->
+      <div id="empty-state" class="empty-state" style="display: none; text-align: center; padding: 4rem 1rem;">
+        <div style="font-size: 3.5rem; margin-bottom: 0.5rem;">🔍</div>
+        <h3>No se encontraron productos</h3>
+        <p style="color: var(--text-muted); margin-top: 0.25rem;">Prueba con otro término de búsqueda o cambia los filtros de categoría.</p>
+      </div>
+
+    </section>
+
+    <!-- VISTA 2: COMPARADOR EN TIENDA -->
+    <section id="view-comparator" class="view-section" style="display: none;">
+      
+      <div class="comparator-view">
+        
+        <!-- Panel Principal de Comparación -->
+        <div class="comparator-card-main">
+          <div style="margin-bottom: 1.5rem;">
+            <h2>⚡ Comparador en Tienda</h2>
+            <p style="color: var(--text-secondary); font-size: 0.92rem;">
+              ¿Estás en Carrefour, Lidl, Dia o Aldi? Compara el precio al instante con tu referencia de Mercadona.
+            </p>
+          </div>
+
+          <!-- PASO 1: Elegir Producto -->
+          <div style="margin-bottom: 1.5rem;">
+            <div class="comparator-step-title">
+              <span class="step-number">1</span> Selecciona el producto de Mercadona
+            </div>
+            <div style="position: relative;">
+              <input 
+                type="text" 
+                id="comp-product-search" 
+                class="search-input" 
+                placeholder="Escribe para buscar producto... (ej. Leche, Huevos, Chopped)"
+                autocomplete="off"
+              >
+              <div id="comp-product-dropdown" class="product-dropdown-list" style="display: none;"></div>
+            </div>
+          </div>
+
+          <!-- PASO 2: Elegir Supermercado Competidor -->
+          <div style="margin-bottom: 1.5rem;">
+            <div class="comparator-step-title">
+              <span class="step-number">2</span> ¿En qué supermercado estás?
+            </div>
+            <div class="supermarkets-row" id="supermarkets-selector">
+              <button class="supermarket-btn active" data-name="Carrefour">🔵 Carrefour</button>
+              <button class="supermarket-btn" data-name="Lidl">🟡 Lidl</button>
+              <button class="supermarket-btn" data-name="Dia">🔴 Dia</button>
+              <button class="supermarket-btn" data-name="Aldi">🔷 Aldi</button>
+              <button class="supermarket-btn" data-name="Alcampo">🔴 Alcampo</button>
+              <button class="supermarket-btn" data-name="Consum">🟠 Consum</button>
+              <button class="supermarket-btn" data-name="Otro">🏪 Otro</button>
+            </div>
+          </div>
+
+          <!-- PASO 3: Tipo de Comparativa (Modo de cálculo) -->
+          <div style="margin-bottom: 1.25rem;">
+            <div class="comparator-step-title">
+              <span class="step-number">3</span> ¿Cómo es el formato en el otro supermercado?
+            </div>
+            <div class="comp-mode-tabs" id="comp-mode-tabs" role="tablist">
+              <button class="comp-mode-tab active" data-mode="direct" type="button">
+                <span class="mode-icon">📦</span> Mismo Envase (Directo)
+              </button>
+              <button class="comp-mode-tab" data-mode="weight" type="button">
+                <span class="mode-icon">⚖️</span> Por Peso / Volumen (g, kg, ml, L)
+              </button>
+              <button class="comp-mode-tab" data-mode="units" type="button">
+                <span class="mode-icon">🔢</span> Por Unidades (piezas, uds)
+              </button>
+            </div>
+          </div>
+
+          <!-- PASO 4: Precios y Formatos -->
+          <div class="comparator-step-title">
+            <span class="step-number">4</span> Introduce los precios y cantidades
+          </div>
+          
+          <div class="comparator-inputs-grid">
+            <!-- Caja de Mercadona -->
+            <div class="comp-benchmark-box" id="comp-benchmark-box">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                <span class="benchmark-name">Mercadona (Referencia)</span>
+                <span class="benchmark-tag" id="comp-mercadona-tag">Último ticket</span>
+              </div>
+              
+              <div class="benchmark-price" id="comp-mercadona-price">-- €</div>
+              
+              <!-- Formato Mercadona dinámico según modo -->
+              <div class="comp-format-controls" id="comp-format-controls-merc" style="display: none; margin-top: 0.75rem;">
+                
+                <!-- Si es Peso / Volumen -->
+                <div id="format-weight-merc" style="display: none;">
+                  <label class="control-label">Peso / Volumen en Mercadona:</label>
+                  <div class="input-with-select">
+                    <input type="number" id="merc-weight-qty" class="mini-number-input" step="any" min="0.01" value="1">
+                    <select id="merc-weight-unit" class="mini-unit-select">
+                      <option value="g">g</option>
+                      <option value="kg">kg</option>
+                      <option value="ml">ml</option>
+                      <option value="L">L</option>
+                    </select>
+                  </div>
+                </div>
+
+                <!-- Si es Unidades -->
+                <div id="format-units-merc" style="display: none;">
+                  <label class="control-label">Unidades en el pack Mercadona:</label>
+                  <div class="input-with-unit-label">
+                    <input type="number" id="merc-units-qty" class="mini-number-input" step="1" min="1" value="1">
+                    <span class="unit-suffix-label">uds / piezas</span>
+                  </div>
+                </div>
+
+                <!-- Indicador de precio normalizado Mercadona -->
+                <div class="unit-price-badge-wrapper" id="merc-unit-price-wrapper" style="margin-top: 0.5rem;">
+                  <span class="unit-price-pill" id="merc-unit-price-display">-- €/kg</span>
+                </div>
+              </div>
+
+              <div class="benchmark-sub" id="comp-mercadona-details">Selecciona un producto arriba</div>
+            </div>
+
+            <!-- Caja del Competidor -->
+            <div class="comp-competitor-box">
+              <span class="stat-label" id="comp-competitor-title">Precio en Carrefour</span>
+              
+              <div class="comp-price-input-wrapper">
+                <input 
+                  type="number" 
+                  step="0.01" 
+                  min="0" 
+                  id="comp-price-input" 
+                  class="comp-price-input" 
+                  placeholder="0.00"
+                >
+                <span class="comp-currency-symbol">€</span>
+              </div>
+
+              <!-- Formato Competidor dinámico según modo -->
+              <div class="comp-format-controls" id="comp-format-controls-comp" style="display: none; margin-top: 0.75rem;">
+                
+                <!-- Si es Peso / Volumen -->
+                <div id="format-weight-comp" style="display: none;">
+                  <label class="control-label" id="label-weight-comp">Peso / Volumen en Carrefour:</label>
+                  <div class="input-with-select">
+                    <input type="number" id="comp-weight-qty" class="mini-number-input" step="any" min="0.01" value="1">
+                    <select id="comp-weight-unit" class="mini-unit-select">
+                      <option value="g">g</option>
+                      <option value="kg">kg</option>
+                      <option value="ml">ml</option>
+                      <option value="L">L</option>
+                    </select>
+                  </div>
+                </div>
+
+                <!-- Si es Unidades -->
+                <div id="format-units-comp" style="display: none;">
+                  <label class="control-label" id="label-units-comp">Unidades en el pack Carrefour:</label>
+                  <div class="input-with-unit-label">
+                    <input type="number" id="comp-units-qty" class="mini-number-input" step="1" min="1" value="1">
+                    <span class="unit-suffix-label">uds / piezas</span>
+                  </div>
+                </div>
+
+                <!-- Indicador de precio normalizado Competidor -->
+                <div class="unit-price-badge-wrapper" id="comp-unit-price-wrapper" style="margin-top: 0.5rem;">
+                  <span class="unit-price-pill" id="comp-unit-price-display">-- €/kg</span>
+                </div>
+              </div>
+
+              <span style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.35rem;" id="comp-subtext">
+                Precio que ves en la etiqueta
+              </span>
+            </div>
+          </div>
+
+          <!-- BANNER DE RESUMEN DE PRECIOS NORMALIZADOS -->
+          <div class="norm-summary-card" id="norm-summary-card" style="display: none;">
+            <div class="norm-summary-row">
+              <div class="norm-item">
+                <span class="norm-label">Mercadona:</span>
+                <strong class="norm-val" id="norm-merc-val">-- €/kg</strong>
+              </div>
+              <div class="norm-vs">vs</div>
+              <div class="norm-item">
+                <span class="norm-label" id="norm-comp-label">Competidor:</span>
+                <strong class="norm-val" id="norm-comp-val">-- €/kg</strong>
+              </div>
+              <div class="norm-diff-pill" id="norm-diff-pill">--</div>
+            </div>
+          </div>
+
+          <!-- BANNER DE VEREDICTO VISUAL EN DIRECTO -->
+          <div class="verdict-banner verdict-neutral" id="verdict-banner" style="display: none;">
+            <div class="verdict-icon" id="verdict-icon">⚖️</div>
+            <div>
+              <div class="verdict-title" id="verdict-title">Introduce un precio para comparar</div>
+              <div class="verdict-message" id="verdict-message">
+                Te indicaremos si ahorras dinero o si te compensa esperar a comprarlo en Mercadona.
+              </div>
+            </div>
+          </div>
+
+          <!-- Botón Guardar en Cesta -->
+          <div class="verdict-actions" id="verdict-actions" style="display: none;">
+            <button class="btn-save-comparison" id="btn-save-comparison">
+              <span>💾</span> Guardar en mi lista de compra
+            </button>
+          </div>
+
+        </div>
+
+        <!-- Barra Lateral: Mi Cesta / Sesión de Compra -->
+        <aside class="comparator-basket-sidebar">
+          <div class="basket-header">
+            <h3>🛒 Mi Sesión de Compra</h3>
+            <button id="btn-clear-basket" style="font-size: 0.8rem; color: var(--danger); font-weight: 600;">
+              Vaciar
+            </button>
+          </div>
+
+          <div class="basket-savings-highlight" id="basket-savings-box">
+            <div style="font-size: 0.82rem; text-transform: uppercase; font-weight: 600; opacity: 0.9;">
+              Ahorro Neto Estimado
+            </div>
+            <div class="savings-num" id="basket-savings-num">0.00 €</div>
+            <div style="font-size: 0.78rem; opacity: 0.85;" id="basket-savings-summary">
+              Compara productos para ver tu balance
+            </div>
+          </div>
+
+          <div class="basket-items-list" id="basket-items-list">
+            <div style="text-align: center; color: var(--text-muted); padding: 2rem 0; font-size: 0.88rem;">
+              No has guardado comparativas en esta visita todavía.
+            </div>
+          </div>
+
+          <!-- Acciones de Sincronización y Exportación de la Cesta -->
+          <div class="basket-footer-actions" id="basket-footer-actions" style="margin-top: 1rem; display: flex; flex-direction: column; gap: 0.5rem;">
+            <button class="btn-sync-github" id="btn-sync-github" title="Subir las comparativas a data/precios_competencia.json en GitHub">
+              <span>☁️</span> Subir a GitHub
+            </button>
+            <button class="btn-export-csv" id="btn-export-csv" title="Descargar archivo CSV con las comparativas registradas">
+              <span>📥</span> Descargar CSV
+            </button>
+          </div>
+        </aside>
+
+      </div>
+
+    </section>
+
+    <!-- VISTA 3: TENDENCIAS E INFLACIÓN -->
+    <section id="view-trends" class="view-section" style="display: none;">
+      <div style="margin-bottom: 1.5rem;">
+        <h2>📈 Inflación & Análisis de Tendencias</h2>
+        <p style="color: var(--text-secondary); font-size: 0.92rem;">
+          Comportamiento histórico de precios en tus compras de Mercadona (2023 - 2026).
+        </p>
+      </div>
+
+      <div class="trends-view">
+        <!-- Subidas más pronunciadas -->
+        <div class="trend-card-section">
+          <h3 style="display: flex; align-items: center; gap: 0.5rem; color: var(--danger);">
+            <span>🔺</span> Mayores Subidas Históricas
+          </h3>
+          <p style="font-size: 0.82rem; color: var(--text-muted); margin-top: 0.2rem;">
+            Productos que más han encarecido respecto a su mínimo histórico.
+          </p>
+          <div class="trend-list" id="trends-hikes-list">
+            <!-- Inyectado dinámicamente -->
+          </div>
+        </div>
+
+        <!-- Bajadas o Productos en Mínimo -->
+        <div class="trend-card-section">
+          <h3 style="display: flex; align-items: center; gap: 0.5rem; color: var(--success);">
+            <span>💎</span> Mejores Oportunidades & Mínimos
+          </h3>
+          <p style="font-size: 0.82rem; color: var(--text-muted); margin-top: 0.2rem;">
+            Productos actualmente en su precio mínimo o con bajada reciente.
+          </p>
+          <div class="trend-list" id="trends-drops-list">
+            <!-- Inyectado dinámicamente -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODAL DE DETALLE DE PRODUCTO Y GRÁFICO HISTÓRICO -->
+  <div class="modal-backdrop" id="product-detail-modal" aria-hidden="true">
+    <div class="modal-window" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <span class="card-category-badge" id="modal-product-cat">Lácteos</span>
+          <h3 id="modal-product-title">Nombre del Producto</h3>
+        </div>
+        <button class="modal-close-btn" id="modal-close-btn" aria-label="Cerrar modal">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Grilla de Estadísticas Rápidas -->
+        <div class="card-stats-triple" style="margin-bottom: 1.5rem; padding: 1rem;">
+          <div class="stat-mini-item">
+            <span class="stat-mini-label">Último Precio</span>
+            <span class="stat-mini-val" id="modal-stat-last" style="font-size: 1.35rem; color: var(--primary);">-- €</span>
+            <span style="font-size: 0.72rem; color: var(--text-muted);" id="modal-stat-last-date">--</span>
+          </div>
+          <div class="stat-mini-item">
+            <span class="stat-mini-label">Mínimo Histórico</span>
+            <span class="stat-mini-val min-val" id="modal-stat-min" style="font-size: 1.35rem;">-- €</span>
+            <span style="font-size: 0.72rem; color: var(--text-muted);" id="modal-stat-min-date">--</span>
+          </div>
+          <div class="stat-mini-item">
+            <span class="stat-mini-label">Máximo Histórico</span>
+            <span class="stat-mini-val max-val" id="modal-stat-max" style="font-size: 1.35rem;">-- €</span>
+            <span style="font-size: 0.72rem; color: var(--text-muted);" id="modal-stat-max-date">--</span>
+          </div>
+          <div class="stat-mini-item" style="border-top: 1px solid var(--border-color); padding-top: 0.5rem; grid-column: span 3; display: flex; justify-content: space-around; flex-direction: row;">
+            <div>
+              <span class="stat-mini-label">Precio Medio: </span>
+              <strong id="modal-stat-avg">-- €</strong>
+            </div>
+            <div>
+              <span class="stat-mini-label">Total Compras: </span>
+              <strong id="modal-stat-count">--</strong>
+            </div>
+            <div>
+              <span class="stat-mini-label">Variación vs Mín: </span>
+              <strong id="modal-stat-change">--</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- Gráfico de Evolución Temporal -->
+        <div style="margin-bottom: 1.5rem;">
+          <h4 style="font-size: 0.95rem; margin-bottom: 0.75rem;">📈 Evolución del Precio en el Tiempo</h4>
+          <div class="chart-container">
+            <canvas id="product-price-chart"></canvas>
+          </div>
+        </div>
+
+        <!-- Formatos Alternativos Relacionados -->
+        <div id="modal-variants-section" style="margin-bottom: 1.5rem; display: none;">
+          <h4 style="font-size: 0.95rem; margin-bottom: 0.5rem;">📦 Otros Formatos / Variantes Relacionadas</h4>
+          <div class="variants-pills" id="modal-variants-list"></div>
+        </div>
+
+        <!-- Tabla Histórica de Compras -->
+        <div>
+          <h4 style="font-size: 0.95rem; margin-bottom: 0.75rem;">📋 Historial de Tickets y Compras</h4>
+          <div style="max-height: 240px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-sm);">
+            <table class="history-table">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Precio Pagado</th>
+                  <th>Diferencia vs Compra Anterior</th>
+                </tr>
+              </thead>
+              <tbody id="modal-history-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Botón Comparar en Tienda desde Modal -->
+        <div style="margin-top: 1.5rem; text-align: right;">
+          <button class="btn-compare-quick" id="modal-btn-compare" style="width: 100%; justify-content: center; padding: 0.85rem;">
+            <span>⚡</span> Comparar este producto en otro supermercado
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE CONFIGURACIÓN Y SINCRONIZACIÓN -->
+  <div class="modal-backdrop" id="settings-modal" aria-hidden="true">
+    <div class="modal-window" style="max-width: 580px;">
+      <div class="modal-header">
+        <h3>⚙️ Datos & Sincronización</h3>
+        <button class="modal-close-btn" id="settings-close-btn">✕</button>
+      </div>
+      <div class="modal-body">
+        
+        <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem;">
+          Este dashboard se nutre automáticamente de tu archivo <strong>precios_productos.xlsx</strong>.
+        </p>
+
+        <!-- Dropzone para arrastrar nuevo Excel -->
+        <div class="dropzone-box" id="excel-dropzone">
+          <div class="dropzone-icon">📥</div>
+          <h4>Arrastra aquí un nuevo precios_productos.xlsx</h4>
+          <p style="font-size: 0.82rem; color: var(--text-muted); margin-top: 0.25rem;">
+            o haz clic para seleccionar archivo desde tu dispositivo
+          </p>
+          <input type="file" id="excel-file-input" accept=".xlsx,.xls" style="display: none;">
+        </div>
+
+        <!-- Estado de la fuente de datos -->
+        <div style="background: var(--bg-surface-subtle); padding: 1rem; border-radius: var(--radius-md); font-size: 0.85rem; margin-bottom: 1rem;">
+          <div><strong>Fuente de datos:</strong> <span id="settings-data-source">Local / Automática</span></div>
+          <div style="margin-top: 0.35rem;"><strong>Última actualización:</strong> <span id="settings-last-sync">--</span></div>
+          <div style="margin-top: 0.35rem;"><strong>Modo Offline:</strong> <span style="color: var(--success); font-weight: 600;">✓ Datos cacheados en el navegador</span></div>
+        </div>
+
+        <!-- GitHub Integration para Leer Excel Maestro -->
+        <div style="margin-bottom: 1.5rem; background: var(--bg-surface-subtle); padding: 1.15rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+          <h4 style="font-size: 0.95rem; margin-bottom: 0.4rem; display: flex; align-items: center; gap: 0.45rem;">
+            <span>🐙</span> Sincronización Automática con GitHub (Opción A)
+          </h4>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.85rem;">
+            Guarda los precios de otros supermercados (Carrefour, Lidl, Dia...) directamente en tu repositorio en <code>data/precios_competencia.json</code> mediante commits automáticos desde el móvil.
+          </p>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem; margin-bottom: 0.65rem;">
+            <div>
+              <label class="control-label">Usuario / Organización:</label>
+              <input type="text" id="github-owner-input" class="search-input" placeholder="ej. albert" style="padding: 0.5rem; font-size: 0.85rem;">
+            </div>
+            <div>
+              <label class="control-label">Repositorio:</label>
+              <input type="text" id="github-repo-input" class="search-input" placeholder="ej. Mercadona" style="padding: 0.5rem; font-size: 0.85rem;">
+            </div>
+          </div>
+
+          <div style="margin-bottom: 0.65rem;">
+            <label class="control-label">Rama (Branch):</label>
+            <input type="text" id="github-branch-input" class="search-input" placeholder="main" value="main" style="padding: 0.5rem; font-size: 0.85rem;">
+          </div>
+
+          <div style="margin-bottom: 0.75rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+              <label class="control-label" style="margin-bottom: 0;">GitHub Token (PAT):</label>
+              <a href="https://github.com/settings/tokens/new?scopes=repo&description=MercadonaTracker" target="_blank" rel="noopener noreferrer" style="font-size: 0.74rem; font-weight: 600; color: var(--primary);">
+                🔑 Crear token en GitHub ➔
+              </a>
+            </div>
+            <input type="password" id="github-token-input" class="search-input" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" style="padding: 0.5rem; font-size: 0.85rem;">
+            <span style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-top: 0.2rem;">
+              * Solo se guarda en la memoria local de tu navegador. Requiere permiso <code>repo</code> o <code>contents:write</code>.
+            </span>
+          </div>
+
+          <div style="margin-bottom: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
+            <input type="checkbox" id="github-autosync-checkbox" checked style="width: 16px; height: 16px; cursor: pointer;">
+            <label for="github-autosync-checkbox" style="font-size: 0.82rem; font-weight: 500; cursor: pointer;">
+              Sincronizar en GitHub automáticamente al guardar cada comparativa
+            </label>
+          </div>
+
+          <button class="btn-card-compare" id="btn-save-github-sync" style="width: 100%; padding: 0.65rem;">
+            <span>☁️</span> Probar Conexión y Guardar en GitHub
+          </button>
+          
+          <div id="github-sync-feedback" style="display: none; margin-top: 0.5rem; padding: 0.5rem 0.75rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600;"></div>
+        </div>
+
+        <!-- Botón Recargar y limpiar caché -->
+        <div style="display: flex; gap: 0.5rem;">
+          <button id="btn-force-reload" class="btn-card-history" style="width: 100%; padding: 0.7rem; font-size: 0.88rem;">
+            🔄 Forzar Recarga de Datos Locales
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- NAVEGACIÓN MÓVIL INFERIOR -->
+  <nav class="mobile-bottom-nav" aria-label="Navegación móvil">
+    <button class="mobile-nav-btn active" data-view="catalog">
+      <span class="nav-icon">📊</span>
+      <span>Catálogo</span>
+    </button>
+    <button class="mobile-nav-btn" data-view="comparator">
+      <span class="nav-icon">⚡</span>
+      <span>Comparar</span>
+    </button>
+    <button class="mobile-nav-btn" data-view="trends">
+      <span class="nav-icon">📈</span>
+      <span>Tendencias</span>
+    </button>
+    <button class="mobile-nav-btn" id="mobile-settings-btn">
+      <span class="nav-icon">⚙️</span>
+      <span>Datos</span>
+    </button>
+  </nav>
+
+  <!-- Módulo Principal de la Aplicación -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
