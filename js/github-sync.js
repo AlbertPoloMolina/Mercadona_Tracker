@@ -8,6 +8,9 @@
 const CONFIG_KEY = 'mercadona_github_sync_config';
 const LOCAL_STORAGE_COMP_KEY = 'mercadona_saved_comparisons';
 
+// Puente seguro de sincronización multi-dispositivo sin tokens en el cliente
+export const GOOGLE_BRIDGE_URL = 'https://script.google.com/macros/s/AKfycbwMnqBS7ILVgfbw45bTWpkNZYdJw94jZGTXWUFQpEoOoN-BbiqiPdma4RHXLB0Rgg0Lyw/exec';
+
 // Helper para codificar en Base64 con soporte para caracteres especiales/tildes en UTF-8
 function utf8ToBase64(str) {
   return btoa(unescape(encodeURIComponent(str)));
@@ -20,6 +23,7 @@ function base64ToUtf8(str) {
 
 export class GitHubSyncManager {
   constructor() {
+    this.bridgeUrl = GOOGLE_BRIDGE_URL;
     this.config = this.loadConfig();
   }
 
@@ -68,7 +72,8 @@ export class GitHubSyncManager {
   }
 
   isConfigured() {
-    return Boolean(this.config.token && this.config.owner && this.config.repo);
+    // Si tenemos puente activo o token directo, está configurado
+    return Boolean(this.bridgeUrl || (this.config.token && this.config.owner && this.config.repo));
   }
 
   getHeaders() {
@@ -154,12 +159,38 @@ export class GitHubSyncManager {
    * @param {Array} newItems - Lista de comparativas a guardar
    */
   async syncToGitHub(newItems = []) {
-    if (!this.isConfigured()) {
-      throw new Error('Configura primero tu GitHub Token y Repositorio en Ajustes ⚙️.');
-    }
-
     if (!newItems || newItems.length === 0) {
       return { success: true, message: 'No hay elementos nuevos para sincronizar.' };
+    }
+
+    // 1. Sincronización multi-dispositivo sin tokens mediante puente seguro
+    if (this.bridgeUrl) {
+      try {
+        const resp = await fetch(this.bridgeUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(newItems)
+        });
+
+        const data = await resp.json();
+        if (data.success) {
+          localStorage.setItem('mercadona_last_github_sync', new Date().toISOString());
+          return {
+            success: true,
+            totalSaved: data.count || newItems.length,
+            newAdded: newItems.length,
+            viaBridge: true
+          };
+        } else {
+          console.warn('El puente devolvió error:', data.error);
+        }
+      } catch (bridgeErr) {
+        console.warn('Fallo comunicando con el puente, comprobando método directo:', bridgeErr);
+      }
+    }
+
+    if (!this.config.token) {
+      throw new Error('No se pudo sincronizar automáticamente con el puente en la nube ni hay token configurado.');
     }
 
     const { owner, repo, branch, filePath } = this.config;

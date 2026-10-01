@@ -590,55 +590,57 @@
         </div>
 
         <!-- GitHub Integration para Leer Excel Maestro -->
+        <!-- Sincronización en la Nube Multi-dispositivo (Sin tokens) -->
         <div style="margin-bottom: 1.5rem; background: var(--bg-surface-subtle); padding: 1.15rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-          <h4 style="font-size: 0.95rem; margin-bottom: 0.4rem; display: flex; align-items: center; gap: 0.45rem;">
-            <span>🐙</span> Sincronización Automática con GitHub (Opción A)
-          </h4>
-          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.85rem;">
-            Guarda los precios de otros supermercados (Carrefour, Lidl, Dia...) directamente en tu repositorio en <code>data/precios_competencia.json</code> mediante commits automáticos desde el móvil.
-          </p>
-
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem; margin-bottom: 0.65rem;">
-            <div>
-              <label class="control-label">Usuario / Organización:</label>
-              <input type="text" id="github-owner-input" class="search-input" value="AlbertPoloMolina" style="padding: 0.5rem; font-size: 0.85rem;">
-            </div>
-            <div>
-              <label class="control-label">Repositorio:</label>
-              <input type="text" id="github-repo-input" class="search-input" value="Mercadona_Tracker" style="padding: 0.5rem; font-size: 0.85rem;">
-            </div>
-          </div>
-
-          <div style="margin-bottom: 0.65rem;">
-            <label class="control-label">Rama (Branch):</label>
-            <input type="text" id="github-branch-input" class="search-input" placeholder="main" value="main" style="padding: 0.5rem; font-size: 0.85rem;">
-          </div>
-
-          <div style="margin-bottom: 0.75rem;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
-              <label class="control-label" style="margin-bottom: 0;">GitHub Token (PAT):</label>
-              <a href="https://github.com/settings/tokens/new?scopes=repo&description=MercadonaTracker" target="_blank" rel="noopener noreferrer" style="font-size: 0.74rem; font-weight: 600; color: var(--primary);">
-                🔑 Crear token en GitHub ➔
-              </a>
-            </div>
-            <input type="password" id="github-token-input" class="search-input" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" style="padding: 0.5rem; font-size: 0.85rem;">
-            <span style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-top: 0.2rem;">
-              * Solo se guarda en la memoria local de tu navegador. Requiere permiso <code>repo</code> o <code>contents:write</code>.
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+            <h4 style="font-size: 0.95rem; margin: 0; display: flex; align-items: center; gap: 0.45rem;">
+              <span>☁️</span> Sincronización Multi-dispositivo (Sin Tokens)
+            </h4>
+            <span style="background: rgba(16, 185, 129, 0.15); color: var(--success); font-size: 0.72rem; font-weight: 700; padding: 0.2rem 0.55rem; border-radius: 999px;">
+              ACTIVA ✓
             </span>
           </div>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem; line-height: 1.45;">
+            Los precios de otros supermercados se guardan automáticamente en <code>data/precios_competencia.json</code> en tu repositorio desde <strong>cualquier móvil u ordenador</strong> sin tener que introducir tokens ni contraseñas.
+          </p>
 
-          <div style="margin-bottom: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
-            <input type="checkbox" id="github-autosync-checkbox" checked style="width: 16px; height: 16px; cursor: pointer;">
-            <label for="github-autosync-checkbox" style="font-size: 0.82rem; font-weight: 500; cursor: pointer;">
-              Sincronizar en GitHub automáticamente al guardar cada comparativa
-            </label>
+          <div style="background: var(--bg-card); padding: 0.75rem 0.85rem; border-radius: 8px; font-size: 0.8rem; line-height: 1.6; border: 1px solid var(--border-color);">
+            <div><strong>Repositorio destino:</strong> <code>AlbertPoloMolina/Mercadona_Tracker</code></div>
+            <div><strong>Archivo:</strong> <code>data/precios_competencia.json</code> (Rama main)</div>
+            <div><strong>Estado:</strong> <span style="color: var(--success); font-weight: 600;">Conectado mediante puente seguro en la nube</span></div>
           </div>
 
-          <button class="btn-card-compare" id="btn-save-github-sync" style="width: 100%; padding: 0.65rem;">
-            <span>☁️</span> Probar Conexión y Guardar en GitHub
-          </button>
-          
-          <div id="github-sync-feedback" style="display: none; margin-top: 0.5rem; padding: 0.5rem 0.75rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600;"></div>
+          <details style="margin-top: 0.85rem; font-size: 0.78rem; color: var(--text-muted);">
+            <summary style="cursor: pointer; font-weight: 600; color: var(--primary);">⚙️ Configuración manual avanzada (opcional)</summary>
+            <div style="margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--border-color);">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.5rem;">
+                <div>
+                  <label class="control-label" style="font-size: 0.75rem;">Usuario:</label>
+                  <input type="text" id="github-owner-input" class="search-input" value="AlbertPoloMolina" style="padding: 0.4rem; font-size: 0.8rem;">
+                </div>
+                <div>
+                  <label class="control-label" style="font-size: 0.75rem;">Repositorio:</label>
+                  <input type="text" id="github-repo-input" class="search-input" value="Mercadona_Tracker" style="padding: 0.4rem; font-size: 0.8rem;">
+                </div>
+              </div>
+              <div style="margin-bottom: 0.5rem;">
+                <label class="control-label" style="font-size: 0.75rem;">Rama:</label>
+                <input type="text" id="github-branch-input" class="search-input" value="main" style="padding: 0.4rem; font-size: 0.8rem;">
+              </div>
+              <div style="margin-bottom: 0.5rem;">
+                <label class="control-label" style="font-size: 0.75rem;">Token personal alternativo (opcional):</label>
+                <input type="password" id="github-token-input" class="search-input" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" style="padding: 0.4rem; font-size: 0.8rem;">
+              </div>
+              <div style="margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem;">
+                <input type="checkbox" id="github-autosync-checkbox" checked style="width: 14px; height: 14px; cursor: pointer;">
+                <label for="github-autosync-checkbox" style="font-size: 0.75rem; cursor: pointer;">Sincronizar automáticamente al guardar comparativa</label>
+              </div>
+              <button class="btn-card-compare" id="btn-save-github-sync" style="width: 100%; padding: 0.5rem; font-size: 0.8rem; margin-top: 0.35rem;">
+                Guardar Ajustes Manuales
+              </button>
+              <div id="github-sync-feedback" style="display: none; margin-top: 0.5rem; padding: 0.4rem 0.6rem; border-radius: 6px; font-size: 0.76rem; font-weight: 600;"></div>
+            </div>
+          </details>
         </div>
 
         <!-- Botón Recargar y limpiar caché -->
