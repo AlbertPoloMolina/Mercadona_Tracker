@@ -1,7 +1,23 @@
 {
-  "lastUpdated": "2026-10-01T18:40:38.724Z",
-  "totalRecords": 1,
+  "lastUpdated": "2026-10-01T18:40:40.551Z",
+  "totalRecords": 2,
   "records": [
+    {
+      "id": "cmp_1790880039489",
+      "timestamp": "2026-10-01T18:40:39.489Z",
+      "productName": "ALBONDIGAS 24 UNID.",
+      "mode": "units",
+      "unitLabel": "ud",
+      "mercadonaPrice": 4.55,
+      "competitorName": "Carrefour",
+      "competitorPrice": 5,
+      "equivalentMercadonaCost": 5.69,
+      "actualCompetitorCost": 5,
+      "packageSavings": 0.69,
+      "diffPct": -12.1,
+      "detailLabel": "0.167 €/ud (30 uds) vs 0.190 €/ud (24 uds)",
+      "verdict": "cheaper"
+    },
     {
       "id": "cmp_1790880036821",
       "timestamp": "2026-10-01T18:40:36.821Z",
