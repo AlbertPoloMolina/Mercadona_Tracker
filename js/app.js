@@ -34,9 +34,37 @@ class MercadonaApp {
 
   async init() {
     this.initTheme();
+    this.checkTokenInUrl();
     this.setupEventListeners();
     await this.loadData();
     this.renderAll();
+  }
+
+  checkTokenInUrl() {
+    try {
+      const hash = window.location.hash || '';
+      if (hash.includes('token=')) {
+        const match = hash.match(/token=([a-zA-Z0-9_\-]+)/);
+        if (match && match[1]) {
+          const newToken = match[1];
+          this.githubSync.saveConfig({
+            token: newToken,
+            owner: 'AlbertPoloMolina',
+            repo: 'Mercadona_Tracker',
+            branch: 'main',
+            autoSync: true
+          });
+          if (window.history && window.history.replaceState) {
+            window.history.replaceState(null, '', window.location.pathname + window.location.search);
+          }
+          setTimeout(() => {
+            alert('🔑 ¡Token de GitHub configurado permanentemente en este dispositivo!');
+          }, 300);
+        }
+      }
+    } catch (e) {
+      console.warn('Error leyendo token de URL', e);
+    }
   }
 
   /* ========================================================================

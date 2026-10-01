@@ -26,10 +26,21 @@ export class GitHubSyncManager {
   loadConfig() {
     try {
       const stored = localStorage.getItem(CONFIG_KEY);
-      return stored ? JSON.parse(stored) : {
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return {
+          token: parsed.token || '',
+          owner: parsed.owner || 'AlbertPoloMolina',
+          repo: parsed.repo || 'Mercadona_Tracker',
+          branch: parsed.branch || 'main',
+          filePath: parsed.filePath || 'data/precios_competencia.json',
+          autoSync: parsed.autoSync !== false
+        };
+      }
+      return {
         token: '',
-        owner: '',
-        repo: '',
+        owner: 'AlbertPoloMolina',
+        repo: 'Mercadona_Tracker',
         branch: 'main',
         filePath: 'data/precios_competencia.json',
         autoSync: true
@@ -37,8 +48,8 @@ export class GitHubSyncManager {
     } catch (e) {
       return {
         token: '',
-        owner: '',
-        repo: '',
+        owner: 'AlbertPoloMolina',
+        repo: 'Mercadona_Tracker',
         branch: 'main',
         filePath: 'data/precios_competencia.json',
         autoSync: true
