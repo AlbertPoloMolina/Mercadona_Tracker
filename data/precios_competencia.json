@@ -1,4 +1,23 @@
 {
-  "lastUpdated": "2026-10-01T18:35:00Z",
-  "records": []
+  "lastUpdated": "2026-10-01T17:44:23.458Z",
+  "totalRecords": 1,
+  "records": [
+    {
+      "id": "comp_test_init",
+      "date": "01/10/2026 19:45",
+      "productId": "prod_test",
+      "productName": "LECHE ENTERA HACENDADO (TEST)",
+      "competitorName": "Carrefour",
+      "mode": "direct",
+      "competitorPrice": 0.95,
+      "competitorUnitPrice": 0.95,
+      "mercadonaPrice": 0.99,
+      "mercadonaUnitPrice": 0.99,
+      "equivalentMercadonaCost": 0.99,
+      "packageSavings": 0.04,
+      "diffPct": -4.04,
+      "verdict": "cheaper",
+      "detailLabel": "1 L vs 1 L"
+    }
+  ]
 }
