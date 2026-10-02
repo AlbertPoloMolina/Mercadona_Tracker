@@ -1640,7 +1640,7 @@ class MercadonaApp {
     if (n.includes('mercadona')) return '🟢';
     if (n.includes('carrefour')) return '🔵';
     if (n.includes('lidl')) return '🟡';
-    if (n.includes('family cash') || n.includes('familycash')) return '🔴';
+    if (n.includes('family cash') || n.includes('familycash')) return '🟢';
     if (n.includes('dia')) return '🔴';
     if (n.includes('aldi')) return '🔷';
     if (n.includes('alcampo')) return '🔴';

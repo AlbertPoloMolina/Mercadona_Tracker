@@ -13,7 +13,7 @@
   --accent-gold: #f59e0b;
   --accent-blue: #3b82f6;
   --accent-purple: #8b5cf6;
-  
+
   /* Status Colors */
   --success: #10b981;
   --success-bg: rgba(16, 185, 129, 0.12);
@@ -25,7 +25,7 @@
   /* Supermarket Brand Colors */
   --carrefour: #0f4c81;
   --lidl: #0050aa;
-  --familycash: #d90429;
+  --familycash: #61A229;
   --dia: #d51b27;
   --aldi: #00205b;
   --alcampo: #e2001a;
@@ -49,7 +49,8 @@
 }
 
 /* Light Theme Variables (Default) */
-[data-theme="light"], :root {
+[data-theme="light"],
+:root {
   --bg-app: #f6f8fb;
   --bg-surface: #ffffff;
   --bg-surface-elevated: #ffffff;
@@ -93,7 +94,9 @@
 /* ==========================================================================
    BASE & RESET
    ========================================================================== */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -112,7 +115,12 @@ body {
   transition: background-color var(--transition-normal), color var(--transition-normal);
 }
 
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-family: var(--font-display);
   font-weight: 700;
   color: var(--text-primary);
@@ -133,7 +141,9 @@ button {
   transition: all var(--transition-fast);
 }
 
-input, select, textarea {
+input,
+select,
+textarea {
   font-family: var(--font-body);
   border: 1px solid var(--border-color);
   background: var(--bg-surface);
@@ -143,7 +153,9 @@ input, select, textarea {
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
-input:focus, select:focus, textarea:focus {
+input:focus,
+select:focus,
+textarea:focus {
   border-color: var(--border-focus);
   box-shadow: 0 0 0 3px rgba(0, 139, 83, 0.18);
 }
@@ -363,10 +375,25 @@ input:focus, select:focus, textarea:focus {
   flex-shrink: 0;
 }
 
-.stat-icon.green { background: rgba(0, 139, 83, 0.12); color: var(--primary); }
-.stat-icon.blue { background: rgba(59, 130, 246, 0.12); color: var(--accent-blue); }
-.stat-icon.amber { background: rgba(245, 158, 11, 0.12); color: var(--accent-gold); }
-.stat-icon.purple { background: rgba(139, 92, 246, 0.12); color: var(--accent-purple); }
+.stat-icon.green {
+  background: rgba(0, 139, 83, 0.12);
+  color: var(--primary);
+}
+
+.stat-icon.blue {
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--accent-blue);
+}
+
+.stat-icon.amber {
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--accent-gold);
+}
+
+.stat-icon.purple {
+  background: rgba(139, 92, 246, 0.12);
+  color: var(--accent-purple);
+}
 
 .stat-details {
   display: flex;
@@ -742,8 +769,13 @@ input:focus, select:focus, textarea:focus {
   color: var(--text-primary);
 }
 
-.stat-mini-val.min-val { color: var(--success); }
-.stat-mini-val.max-val { color: var(--danger); }
+.stat-mini-val.min-val {
+  color: var(--success);
+}
+
+.stat-mini-val.max-val {
+  color: var(--danger);
+}
 
 /* Range Indicator Bar */
 .card-range-indicator {
@@ -955,13 +987,41 @@ input:focus, select:focus, textarea:focus {
   box-shadow: 0 4px 12px rgba(0, 139, 83, 0.3);
 }
 
-.supermarket-btn[data-name="Carrefour"].active { background: var(--carrefour); border-color: var(--carrefour); }
-.supermarket-btn[data-name="Lidl"].active { background: var(--lidl); border-color: var(--lidl); }
-.supermarket-btn[data-name="Family Cash"].active { background: var(--familycash); border-color: var(--familycash); box-shadow: 0 4px 12px rgba(217, 4, 41, 0.35); }
-.supermarket-btn[data-name="Dia"].active { background: var(--dia); border-color: var(--dia); }
-.supermarket-btn[data-name="Aldi"].active { background: var(--aldi); border-color: var(--aldi); }
-.supermarket-btn[data-name="Alcampo"].active { background: var(--alcampo); border-color: var(--alcampo); }
-.supermarket-btn[data-name="Consum"].active { background: var(--consum); border-color: var(--consum); }
+.supermarket-btn[data-name="Carrefour"].active {
+  background: var(--carrefour);
+  border-color: var(--carrefour);
+}
+
+.supermarket-btn[data-name="Lidl"].active {
+  background: var(--lidl);
+  border-color: var(--lidl);
+}
+
+.supermarket-btn[data-name="Family Cash"].active {
+  background: var(--familycash);
+  border-color: var(--familycash);
+  box-shadow: 0 4px 12px rgba(97, 162, 41, 0.35);
+}
+
+.supermarket-btn[data-name="Dia"].active {
+  background: var(--dia);
+  border-color: var(--dia);
+}
+
+.supermarket-btn[data-name="Aldi"].active {
+  background: var(--aldi);
+  border-color: var(--aldi);
+}
+
+.supermarket-btn[data-name="Alcampo"].active {
+  background: var(--alcampo);
+  border-color: var(--alcampo);
+}
+
+.supermarket-btn[data-name="Consum"].active {
+  background: var(--consum);
+  border-color: var(--consum);
+}
 
 /* Comparator Price Input Box */
 .comparator-inputs-grid {
@@ -1299,9 +1359,17 @@ input:focus, select:focus, textarea:focus {
   line-height: 1.2;
 }
 
-.verdict-success .verdict-title { color: var(--success); }
-.verdict-danger .verdict-title { color: var(--danger); }
-.verdict-neutral .verdict-title { color: var(--warning); }
+.verdict-success .verdict-title {
+  color: var(--success);
+}
+
+.verdict-danger .verdict-title {
+  color: var(--danger);
+}
+
+.verdict-neutral .verdict-title {
+  color: var(--warning);
+}
 
 .verdict-message {
   font-size: 0.9rem;
@@ -1537,8 +1605,13 @@ input:focus, select:focus, textarea:focus {
   border-left: 4px solid var(--primary);
 }
 
-.trend-item.spike { border-left-color: var(--danger); }
-.trend-item.drop { border-left-color: var(--success); }
+.trend-item.spike {
+  border-left-color: var(--danger);
+}
+
+.trend-item.drop {
+  border-left-color: var(--success);
+}
 
 /* ==========================================================================
    SETTINGS & DATA SYNC MODAL
@@ -1554,7 +1627,8 @@ input:focus, select:focus, textarea:focus {
   margin: 1rem 0;
 }
 
-.dropzone-box:hover, .dropzone-box.drag-over {
+.dropzone-box:hover,
+.dropzone-box.drag-over {
   border-color: var(--primary);
   background: rgba(0, 139, 83, 0.05);
 }
@@ -1664,20 +1738,25 @@ input:focus, select:focus, textarea:focus {
   .nav-tabs {
     display: none;
   }
+
   .mobile-bottom-nav {
     display: flex;
   }
+
   /* Ocultar tarjetas de estadísticas superiores en versión móvil */
   .stats-banner {
     display: none !important;
   }
+
   .comparator-view {
     grid-template-columns: 1fr;
     gap: 1rem;
   }
+
   .trends-view {
     grid-template-columns: 1fr;
   }
+
   .comparator-inputs-grid {
     grid-template-columns: 1fr;
     gap: 0.85rem;
@@ -1685,10 +1764,13 @@ input:focus, select:focus, textarea:focus {
 }
 
 @media (max-width: 600px) {
-  html, body {
+
+  html,
+  body {
     max-width: 100vw;
     overflow-x: hidden;
   }
+
   .app-container {
     padding-left: 0.75rem;
     padding-right: 0.75rem;
@@ -1697,78 +1779,98 @@ input:focus, select:focus, textarea:focus {
     max-width: 100vw;
     overflow-x: hidden;
   }
+
   .comparator-card-main {
     padding: 1rem 0.85rem;
     border-radius: var(--radius-md);
     max-width: 100%;
     box-sizing: border-box;
   }
+
   .comparator-step-title {
     font-size: 0.88rem;
   }
+
   .supermarkets-row {
     gap: 0.35rem;
   }
+
   .supermarket-btn {
     padding: 0.4rem 0.65rem;
     font-size: 0.82rem;
   }
+
   .comp-benchmark-box,
   .comp-competitor-box {
     padding: 0.9rem 0.8rem;
     max-width: 100%;
     box-sizing: border-box;
   }
+
   .comp-benchmark-box .benchmark-price {
     font-size: 1.85rem;
   }
+
   .comp-price-input {
     font-size: 1.6rem;
     padding: 0.45rem 2.2rem 0.45rem 0.75rem;
   }
+
   .mini-number-input {
     font-size: 1.05rem;
     padding: 0.4rem 0.55rem;
     min-width: 0;
   }
+
   .mini-unit-select {
     width: 68px;
   }
+
   .norm-summary-card {
     padding: 0.75rem 0.85rem;
   }
+
   .norm-summary-row {
     flex-direction: column;
     align-items: stretch;
     gap: 0.45rem;
   }
+
   .norm-diff-pill {
     text-align: center;
     width: 100%;
     font-size: 0.82rem;
   }
+
   .verdict-banner {
     padding: 0.85rem 0.95rem;
     gap: 0.75rem;
   }
+
   .verdict-icon {
     font-size: 1.8rem;
   }
+
   .verdict-title {
     font-size: 1rem;
   }
+
   .verdict-message {
     font-size: 0.82rem;
   }
+
   .search-row {
     flex-direction: column;
   }
+
   .sort-select-wrapper {
     width: 100%;
   }
+
   .products-grid {
     grid-template-columns: 1fr;
   }
+
   .card-stats-grid {
     grid-template-columns: 1fr 1fr;
   }
@@ -2075,4 +2177,3 @@ input:focus, select:focus, textarea:focus {
   font-size: 0.72rem;
   color: var(--text-muted);
 }
-
