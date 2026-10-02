@@ -116,42 +116,44 @@ export class GitHubSyncManager {
    * Carga el archivo data/precios_competencia.json existente en GitHub o localmente
    */
   async fetchCompetitorHistory() {
-    // Si no está configurado GitHub, intentar leer archivo local
-    if (!this.isConfigured()) {
-      try {
-        const resp = await fetch('data/precios_competencia.json?t=' + Date.now());
-        if (resp.ok) {
-          return await resp.json();
-        }
-      } catch (e) {
-        // archivo no existe o local
-      }
-      return { lastUpdated: null, records: [] };
-    }
-
-    const { owner, repo, branch, filePath } = this.config;
-    const url = `https://api.github.com/repos/${owner}/${repo}/contents/${filePath}?ref=${branch}&t=${Date.now()}`;
-
+    // 1. Intentar cargar data/precios_competencia.json local o de GitHub Pages (rápido y funciona sin token)
     try {
-      const resp = await fetch(url, { headers: this.getHeaders() });
-      if (resp.status === 404) {
-        return { sha: null, data: { lastUpdated: null, records: [] } };
+      const resp = await fetch('data/precios_competencia.json?t=' + Date.now());
+      if (resp.ok) {
+        const localData = await resp.json();
+        if (localData && Array.isArray(localData.records)) {
+          return localData;
+        }
       }
-      if (!resp.ok) {
-        throw new Error(`Error ${resp.status} obteniendo archivo de GitHub.`);
-      }
-
-      const fileJson = await resp.json();
-      const contentStr = base64ToUtf8(fileJson.content);
-      const parsedData = JSON.parse(contentStr);
-      return {
-        sha: fileJson.sha,
-        data: parsedData
-      };
-    } catch (err) {
-      console.warn('Error al obtener histórico de competencia de GitHub:', err);
-      return { sha: null, data: { lastUpdated: null, records: [] } };
+    } catch (e) {
+      // continuar
     }
+
+    // 2. Si hay token directo de GitHub configurado, consultar API de GitHub
+    if (this.config.token && this.config.owner && this.config.repo) {
+      const { owner, repo, branch, filePath } = this.config;
+      const url = `https://api.github.com/repos/${owner}/${repo}/contents/${filePath}?ref=${branch}&t=${Date.now()}`;
+
+      try {
+        const resp = await fetch(url, { headers: this.getHeaders() });
+        if (resp.status === 404) {
+          return { sha: null, data: { lastUpdated: null, records: [] } };
+        }
+        if (resp.ok) {
+          const fileJson = await resp.json();
+          const contentStr = base64ToUtf8(fileJson.content);
+          const parsedData = JSON.parse(contentStr);
+          return {
+            sha: fileJson.sha,
+            data: parsedData
+          };
+        }
+      } catch (err) {
+        console.warn('Error al obtener histórico de competencia de GitHub API:', err);
+      }
+    }
+
+    return { lastUpdated: null, records: [] };
   }
 
   /**

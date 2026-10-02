@@ -25,6 +25,7 @@
   /* Supermarket Brand Colors */
   --carrefour: #0f4c81;
   --lidl: #0050aa;
+  --familycash: #d90429;
   --dia: #d51b27;
   --aldi: #00205b;
   --alcampo: #e2001a;
@@ -956,6 +957,7 @@ input:focus, select:focus, textarea:focus {
 
 .supermarket-btn[data-name="Carrefour"].active { background: var(--carrefour); border-color: var(--carrefour); }
 .supermarket-btn[data-name="Lidl"].active { background: var(--lidl); border-color: var(--lidl); }
+.supermarket-btn[data-name="Family Cash"].active { background: var(--familycash); border-color: var(--familycash); box-shadow: 0 4px 12px rgba(217, 4, 41, 0.35); }
 .supermarket-btn[data-name="Dia"].active { background: var(--dia); border-color: var(--dia); }
 .supermarket-btn[data-name="Aldi"].active { background: var(--aldi); border-color: var(--aldi); }
 .supermarket-btn[data-name="Alcampo"].active { background: var(--alcampo); border-color: var(--alcampo); }
@@ -1771,3 +1773,306 @@ input:focus, select:focus, textarea:focus {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* ==========================================================================
+   NOMBRES PERSONALIZADOS, PRECIOS UNITARIOS Y RANKINGS MULTI-SUPERMERCADO
+   ========================================================================== */
+
+/* Subtítulo de ticket original */
+.card-ticket-name {
+  display: block;
+  font-size: 0.74rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-top: -0.45rem;
+  margin-bottom: 0.65rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modal-ticket-sub {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  margin-top: 0.2rem;
+  font-weight: 500;
+}
+
+.table-ticket-sub {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-top: 0.15rem;
+}
+
+/* Badge de precio unitario (€/kg, €/L, €/ud) en tarjetas y tablas */
+.card-unit-price-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--primary);
+  background: rgba(0, 139, 83, 0.1);
+  border: 1px solid rgba(0, 139, 83, 0.22);
+  padding: 0.15rem 0.55rem;
+  border-radius: var(--radius-full);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.table-unit-price-tag {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin-top: 0.15rem;
+}
+
+/* Botones de edición en el modal */
+.btn-edit-display-name {
+  padding: 0.25rem 0.65rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--primary);
+  background: rgba(0, 139, 83, 0.08);
+  border: 1px solid rgba(0, 139, 83, 0.25);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-edit-display-name:hover {
+  background: var(--primary);
+  color: #fff;
+}
+
+.modal-inline-edit {
+  background: var(--bg-surface);
+  padding: 0.85rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-primary-mini {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  padding: 0.4rem 0.8rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.btn-primary-mini:hover {
+  background: var(--primary-hover);
+}
+
+.btn-secondary-mini {
+  background: var(--bg-surface-subtle);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  padding: 0.4rem 0.7rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-secondary-mini:hover {
+  border-color: var(--text-muted);
+}
+
+/* Caja de formato en el modal */
+.modal-format-box {
+  background: var(--bg-surface-subtle);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1rem;
+}
+
+.format-box-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-right: 0.35rem;
+}
+
+.format-pill {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius-full);
+  font-size: 0.82rem;
+  color: var(--text-primary);
+}
+
+.btn-edit-format {
+  padding: 0.25rem 0.65rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-edit-format:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.format-mode-selector {
+  display: flex;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.format-mode-selector label {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  cursor: pointer;
+}
+
+/* Card & Lista del Ranking entre Supermercados */
+.comp-ranking-card {
+  background: var(--bg-surface-subtle);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1.15rem;
+  margin-top: 1.25rem;
+}
+
+.comp-ranking-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.ranking-product-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: rgba(0, 139, 83, 0.1);
+  color: var(--primary);
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--radius-full);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.supermarket-ranking-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.super-rank-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.7rem 0.85rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  transition: transform var(--transition-fast), border-color var(--transition-fast);
+}
+
+.super-rank-item.winner {
+  border-color: rgba(16, 185, 129, 0.5);
+  background: rgba(16, 185, 129, 0.05);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.12);
+}
+
+.super-rank-item.is-mercadona {
+  border-left: 4px solid var(--primary);
+}
+
+.super-rank-left {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.super-rank-medal {
+  font-size: 1.3rem;
+  line-height: 1;
+  min-width: 26px;
+  text-align: center;
+}
+
+.super-rank-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.super-rank-name {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.super-rank-date {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.super-rank-right {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+
+.super-rank-unit-price {
+  font-size: 1.05rem;
+  font-weight: 800;
+  font-family: var(--font-display);
+  color: var(--text-primary);
+}
+
+.super-rank-item.winner .super-rank-unit-price {
+  color: var(--success);
+}
+
+.super-rank-diff {
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.super-rank-diff.winner-diff {
+  color: var(--success);
+}
+
+.super-rank-diff.more-diff {
+  color: var(--danger);
+}
+
+.super-rank-package {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+

@@ -226,6 +226,7 @@
             <div class="supermarkets-row" id="supermarkets-selector">
               <button class="supermarket-btn active" data-name="Carrefour">🔵 Carrefour</button>
               <button class="supermarket-btn" data-name="Lidl">🟡 Lidl</button>
+              <button class="supermarket-btn" data-name="Family Cash">🔴 Family Cash</button>
               <button class="supermarket-btn" data-name="Dia">🔴 Dia</button>
               <button class="supermarket-btn" data-name="Aldi">🔷 Aldi</button>
               <button class="supermarket-btn" data-name="Alcampo">🔴 Alcampo</button>
@@ -396,6 +397,25 @@
             </button>
           </div>
 
+          <!-- RANKING COMPARATIVO ENTRE TODOS LOS SUPERMERCADOS -->
+          <div class="comp-ranking-card" id="comp-ranking-card" style="display: none;">
+            <div class="comp-ranking-header">
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span style="font-size: 1.25rem;">🏆</span>
+                <div>
+                  <h3 style="font-size: 0.98rem; margin: 0;">Comparativa entre Supermercados</h3>
+                  <div style="font-size: 0.78rem; color: var(--text-muted);">
+                    Ranking ordenado por precio unitario (<span id="comp-ranking-unit-type">€/kg</span>)
+                  </div>
+                </div>
+              </div>
+              <span class="ranking-product-label" id="comp-ranking-prod-name">Producto</span>
+            </div>
+            <div class="supermarket-ranking-list" id="comp-supermarket-ranking-list">
+              <!-- Filas inyectadas dinámicamente -->
+            </div>
+          </div>
+
         </div>
 
         <!-- Barra Lateral: Mi Cesta / Sesión de Compra -->
@@ -482,16 +502,35 @@
   <div class="modal-backdrop" id="product-detail-modal" aria-hidden="true">
     <div class="modal-window" role="dialog" aria-modal="true">
       <div class="modal-header">
-        <div class="modal-title-group">
-          <span class="card-category-badge" id="modal-product-cat">Lácteos</span>
-          <h3 id="modal-product-title">Nombre del Producto</h3>
+        <div class="modal-title-group" style="width: 100%;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap;">
+            <span class="card-category-badge" id="modal-product-cat">Lácteos</span>
+            <button class="btn-edit-display-name" id="modal-edit-name-btn" title="Editar nombre para mostrar">
+              ✏️ Editar nombre
+            </button>
+          </div>
+          <h3 id="modal-product-title" style="margin-top: 0.35rem;">Nombre del Producto</h3>
+          <div id="modal-product-ticket-name" class="modal-ticket-sub">Ticket original: --</div>
+
+          <!-- Formulario para editar nombre -->
+          <div id="modal-name-edit-form" class="modal-inline-edit" style="display: none; margin-top: 0.65rem;">
+            <label style="font-size: 0.78rem; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 0.25rem;">
+              Nombre más claro para mostrar y buscar:
+            </label>
+            <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+              <input type="text" id="modal-edit-name-input" class="search-input" style="flex: 1; min-width: 180px;" placeholder="Ej: Aceite de Oliva Virgen Extra 1L">
+              <button id="modal-save-name-btn" class="btn-primary-mini">Guardar</button>
+              <button id="modal-reset-name-btn" class="btn-secondary-mini" title="Restaurar al nombre del ticket">Restaurar</button>
+              <button id="modal-cancel-name-btn" class="btn-secondary-mini">✕</button>
+            </div>
+          </div>
         </div>
         <button class="modal-close-btn" id="modal-close-btn" aria-label="Cerrar modal">✕</button>
       </div>
 
       <div class="modal-body">
         <!-- Grilla de Estadísticas Rápidas -->
-        <div class="card-stats-triple" style="margin-bottom: 1.5rem; padding: 1rem;">
+        <div class="card-stats-triple" style="margin-bottom: 1.25rem; padding: 1rem;">
           <div class="stat-mini-item">
             <span class="stat-mini-label">Último Precio</span>
             <span class="stat-mini-val" id="modal-stat-last" style="font-size: 1.35rem; color: var(--primary);">-- €</span>
@@ -520,6 +559,54 @@
               <span class="stat-mini-label">Variación vs Mín: </span>
               <strong id="modal-stat-change">--</strong>
             </div>
+          </div>
+        </div>
+
+        <!-- Formato por Defecto (Peso / Volumen / Unidades en Mercadona) -->
+        <div class="modal-format-box" id="modal-format-box" style="margin-bottom: 1.25rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+            <div>
+              <span class="format-box-title">⚖️ Formato en Mercadona:</span>
+              <strong id="modal-format-badge" class="format-pill">1 ud (envase)</strong>
+              <span id="modal-unit-price-badge" class="unit-price-pill" style="margin-left: 0.35rem;">--</span>
+            </div>
+            <button class="btn-edit-format" id="modal-edit-format-btn">✏️ Editar peso/uds</button>
+          </div>
+
+          <!-- Formulario edición formato -->
+          <div id="modal-format-edit-form" class="modal-inline-edit" style="display: none; margin-top: 0.75rem;">
+            <div class="format-mode-selector">
+              <label><input type="radio" name="modal-fmt-mode" value="weight" checked> Peso/Volumen (g, kg, ml, L)</label>
+              <label><input type="radio" name="modal-fmt-mode" value="units"> Unidades (uds, piezas, huevos)</label>
+              <label><input type="radio" name="modal-fmt-mode" value="direct"> Sin peso (Directo)</label>
+            </div>
+            <div id="modal-fmt-inputs-weight" style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+              <input type="number" id="modal-fmt-qty" class="mini-number-input" step="any" min="0.01" value="1" style="width: 100px;">
+              <select id="modal-fmt-unit" class="mini-unit-select">
+                <option value="g">g</option>
+                <option value="kg">kg</option>
+                <option value="ml">ml</option>
+                <option value="L">L</option>
+              </select>
+            </div>
+            <div id="modal-fmt-inputs-units" style="display: none; gap: 0.5rem; margin-top: 0.5rem; align-items: center;">
+              <input type="number" id="modal-fmt-units-qty" class="mini-number-input" step="1" min="1" value="1" style="width: 100px;">
+              <span style="font-size: 0.85rem; color: var(--text-secondary);">unidades / pack</span>
+            </div>
+            <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
+              <button id="modal-save-format-btn" class="btn-primary-mini">💾 Guardar formato</button>
+              <button id="modal-cancel-format-btn" class="btn-secondary-mini">Cancelar</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Ranking Comparativo entre Supermercados Registrados -->
+        <div id="modal-supermarket-ranking-section" style="margin-bottom: 1.5rem;">
+          <h4 style="font-size: 0.95rem; margin-bottom: 0.65rem; display: flex; align-items: center; gap: 0.4rem;">
+            <span>🏆</span> Comparativa de Precios en Supermercados
+          </h4>
+          <div id="modal-supermarket-ranking-list" class="supermarket-ranking-list">
+            <!-- Inyectado dinámicamente -->
           </div>
         </div>
 

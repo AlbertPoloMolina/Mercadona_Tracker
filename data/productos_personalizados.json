@@ -1,0 +1,537 @@
+{
+  "pat--classicas": {
+    "displayName": "Patatas Fritas Clásicas Hacendado",
+    "format": {
+      "mode": "weight",
+      "qty": 300,
+      "unit": "g"
+    }
+  },
+  "yogur-natural-x6": {
+    "displayName": "Yogur Natural Hacendado (Pack 6 uds)",
+    "format": {
+      "mode": "units",
+      "qty": 6,
+      "unit": "uds"
+    }
+  },
+  "t-cherry-500-gr": {
+    "displayName": "Tomates Cherry (Tarrina 500 g)",
+    "format": {
+      "mode": "weight",
+      "qty": 500,
+      "unit": "g"
+    }
+  },
+  "lonchas-de-queso": {
+    "displayName": "Queso Havarti en Lonchas",
+    "format": {
+      "mode": "weight",
+      "qty": 300,
+      "unit": "g"
+    }
+  },
+  "croissant-rell-cacao": {
+    "displayName": "Croissants Rellenos de Crema de Cacao",
+    "format": {
+      "mode": "units",
+      "qty": 6,
+      "unit": "uds"
+    }
+  },
+  "chopped-pieza": {
+    "displayName": "Chopped de Cerdo en Pieza",
+    "format": {
+      "mode": "weight",
+      "qty": 400,
+      "unit": "g"
+    }
+  },
+  "queso-feta": {
+    "displayName": "Queso Feta Griego Tradicional",
+    "format": {
+      "mode": "weight",
+      "qty": 200,
+      "unit": "g"
+    }
+  },
+  "can-nigos": {
+    "displayName": "Canónigos Frescos en Bolsa",
+    "format": {
+      "mode": "weight",
+      "qty": 100,
+      "unit": "g"
+    }
+  },
+  "yogur-liquido-fresa": {
+    "displayName": "Yogur Líquido Sabor Fresa (Botella 1 L)",
+    "format": {
+      "mode": "weight",
+      "qty": 1,
+      "unit": "L",
+      "isVolume": true
+    }
+  },
+  "cintas-de-bacon": {
+    "displayName": "Cintas de Bacon Ahumado (Pack 2x100 g)",
+    "format": {
+      "mode": "weight",
+      "qty": 200,
+      "unit": "g"
+    }
+  },
+  "saladitos": {
+    "displayName": "Saladitos de Hojaldre Surtidos",
+    "format": {
+      "mode": "weight",
+      "qty": 250,
+      "unit": "g"
+    }
+  },
+  "at-n-claro-giras-pk6": {
+    "displayName": "Atún Claro en Aceite de Girasol (Pack 6 latas)",
+    "format": {
+      "mode": "units",
+      "qty": 6,
+      "unit": "uds"
+    }
+  },
+  "atun-claro-natural": {
+    "displayName": "Atún Claro al Natural (Pack 6 latas)",
+    "format": {
+      "mode": "units",
+      "qty": 6,
+      "unit": "uds"
+    }
+  },
+  "marias-doradas": {
+    "displayName": "Galletas María Dorada (Paquete 800 g)",
+    "format": {
+      "mode": "weight",
+      "qty": 800,
+      "unit": "g"
+    }
+  },
+  "cap--extraforte-alum": {
+    "displayName": "Cápsulas Café Extraforte Aluminio (Compatibles)",
+    "format": {
+      "mode": "units",
+      "qty": 20,
+      "unit": "uds"
+    }
+  },
+  "lenteja-cocida": {
+    "displayName": "Lentejas Cocidas Pardinas (Frasco 400 g)",
+    "format": {
+      "mode": "weight",
+      "qty": 400,
+      "unit": "g"
+    }
+  },
+  "leche-entera-p6": {
+    "displayName": "Leche Entera Hacendado (Pack 6x1 L - 6 Litros)",
+    "format": {
+      "mode": "weight",
+      "qty": 6,
+      "unit": "L",
+      "isVolume": true
+    }
+  },
+  "batido-chocolate-pac": {
+    "displayName": "Batido de Chocolate (Pack 6x200 ml - 1,2 L)",
+    "format": {
+      "mode": "weight",
+      "qty": 1.2,
+      "unit": "L",
+      "isVolume": true
+    }
+  },
+  "infusion-dormir": {
+    "displayName": "Infusión Buenas Noches / Dormir (20 bolsitas)",
+    "format": {
+      "mode": "units",
+      "qty": 20,
+      "unit": "uds"
+    }
+  },
+  "longaniza-s-tripa": {
+    "displayName": "Longanizas Frescas sin Tripa (Bandeja 400 g)",
+    "format": {
+      "mode": "weight",
+      "qty": 400,
+      "unit": "g"
+    }
+  },
+  "12-huevos-grandes-l": {
+    "displayName": "Huevos Grandes Clase L (Docena 12 uds)",
+    "format": {
+      "mode": "units",
+      "qty": 12,
+      "unit": "uds"
+    }
+  },
+  "12-huevos-medianos-m": {
+    "displayName": "Huevos Medianos Clase M (Docena 12 uds)",
+    "format": {
+      "mode": "units",
+      "qty": 12,
+      "unit": "uds"
+    }
+  },
+  "6-huevos-grandes-l": {
+    "displayName": "Huevos Grandes Clase L (Media Docena 6 uds)",
+    "format": {
+      "mode": "units",
+      "qty": 6,
+      "unit": "uds"
+    }
+  },
+  "cava-semi-seco": {
+    "displayName": "Cava Semi Seco Cabré & Sabaté (Botella 750 ml)",
+    "format": {
+      "mode": "weight",
+      "qty": 750,
+      "unit": "ml",
+      "isVolume": true
+    }
+  },
+  "q-rallado-fundir": {
+    "displayName": "Queso Rallado Especial para Fundir (Bolsa 200 g)",
+    "format": {
+      "mode": "weight",
+      "qty": 200,
+      "unit": "g"
+    }
+  },
+  "guacamole-200-g": {
+    "displayName": "Guacamole Fresco 95% Aguacate (Tarrina 200 g)",
+    "format": {
+      "mode": "weight",
+      "qty": 200,
+      "unit": "g"
+    }
+  },
+  "pan-de-fibra": {
+    "displayName": "Pan Tostado con Fibra y Sésamo",
+    "format": {
+      "mode": "weight",
+      "qty": 250,
+      "unit": "g"
+    }
+  },
+  "pan-de-leche-3": {
+    "displayName": "Pan de Leche Suave Hacendado (Pack 8 uds)",
+    "format": {
+      "mode": "units",
+      "qty": 8,
+      "unit": "uds"
+    }
+  },
+  "jam-n-serrano-1-2-l": {
+    "displayName": "Jamón Serrano Centro Media Pieza Deshuesada (aprox. 1 kg)",
+    "format": {
+      "mode": "weight",
+      "qty": 1,
+      "unit": "kg"
+    }
+  },
+  "tomate-frito-brick": {
+    "displayName": "Tomate Frito Receta Clásica (Brik 390 g)",
+    "format": {
+      "mode": "weight",
+      "qty": 390,
+      "unit": "g"
+    }
+  },
+  "caldo-cocido": {
+    "displayName": "Caldo de Cocido Casero Tradicional (Brik 1 L)",
+    "format": {
+      "mode": "weight",
+      "qty": 1,
+      "unit": "L",
+      "isVolume": true
+    }
+  },
+  "tomate-triturado": {
+    "displayName": "Tomate Natural Triturado (Lata 400 g)",
+    "format": {
+      "mode": "weight",
+      "qty": 400,
+      "unit": "g"
+    }
+  },
+  "arroz-j-sendra": {
+    "displayName": "Arroz Grano Redondo J.Sendra (Paquete 1 kg)",
+    "format": {
+      "mode": "weight",
+      "qty": 1,
+      "unit": "kg"
+    }
+  },
+  "arroz-redondo": {
+    "displayName": "Arroz Redondo Tradicional (Paquete 1 kg)",
+    "format": {
+      "mode": "weight",
+      "qty": 1,
+      "unit": "kg"
+    }
+  },
+  "arroz-fallera": {
+    "displayName": "Arroz La Fallera Redondo (Paquete 1 kg)",
+    "format": {
+      "mode": "weight",
+      "qty": 1,
+      "unit": "kg"
+    }
+  },
+  "base-pizza-extrafina": {
+    "displayName": "Bases de Pizza Extrafinas (Pack 2 uds)",
+    "format": {
+      "mode": "units",
+      "qty": 2,
+      "unit": "uds"
+    }
+  },
+  "lejia-normal": {
+    "displayName": "Lejía Tradicional Desinfectante (Botella 2 L)",
+    "format": {
+      "mode": "weight",
+      "qty": 2,
+      "unit": "L",
+      "isVolume": true
+    }
+  },
+  "pomelo-s-az-a-adido": {
+    "displayName": "Zumo de Pomelo sin Azúcar Añadido (1 L)",
+    "format": {
+      "mode": "weight",
+      "qty": 1,
+      "unit": "L",
+      "isVolume": true
+    }
+  },
+  "pan-blanco-familiar": {
+    "displayName": "Pan de Molde Blanco Familiar",
+    "format": {
+      "mode": "weight",
+      "qty": 820,
+      "unit": "g"
+    }
+  },
+  "friegasuelos-pino": {
+    "displayName": "Fregasuelos Aroma Pino Fresco (Botella 1,5 L)",
+    "format": {
+      "mode": "weight",
+      "qty": 1.5,
+      "unit": "L",
+      "isVolume": true
+    }
+  },
+  "champ--ac-2-en-1": {
+    "displayName": "Champú Anticaspa 2 en 1 Clásico (Bote 400 ml)",
+    "format": {
+      "mode": "weight",
+      "qty": 400,
+      "unit": "ml",
+      "isVolume": true
+    }
+  },
+  "pizzas-4-quesos-pack": {
+    "displayName": "Pizzas 4 Quesos (Pack 2 unidades)",
+    "format": {
+      "mode": "units",
+      "qty": 2,
+      "unit": "uds"
+    }
+  },
+  "anchoa-oliva-pack-3": {
+    "displayName": "Anchoas en Aceite de Oliva (Pack 3 latas)",
+    "format": {
+      "mode": "units",
+      "qty": 3,
+      "unit": "uds"
+    }
+  },
+  "figuritas-merluza": {
+    "displayName": "Figuritas de Merluza Empanadas (Caja 400 g)",
+    "format": {
+      "mode": "weight",
+      "qty": 400,
+      "unit": "g"
+    }
+  },
+  "macarron": {
+    "displayName": "Macarrones Pasta Clásica (Paquete 1 kg)",
+    "format": {
+      "mode": "weight",
+      "qty": 1,
+      "unit": "kg"
+    }
+  },
+  "aceite-virgen-ex": {
+    "displayName": "Aceite de Oliva Virgen Extra Hacendado (Botella 1 L)",
+    "format": {
+      "mode": "weight",
+      "qty": 1,
+      "unit": "L",
+      "isVolume": true
+    }
+  },
+  "aceite-virgen": {
+    "displayName": "Aceite de Oliva Virgen Hacendado (Botella 1 L)",
+    "format": {
+      "mode": "weight",
+      "qty": 1,
+      "unit": "L",
+      "isVolume": true
+    }
+  },
+  "aceite-girasol-1-l": {
+    "displayName": "Aceite de Girasol Refinado (Botella 1 L)",
+    "format": {
+      "mode": "weight",
+      "qty": 1,
+      "unit": "L",
+      "isVolume": true
+    }
+  },
+  "ajo-seco-250-g": {
+    "displayName": "Ajo Seco Morado (Malla 250 g)",
+    "format": {
+      "mode": "weight",
+      "qty": 250,
+      "unit": "g"
+    }
+  },
+  "albondigas-24-unid-": {
+    "displayName": "Albóndigas de Carne Mixta (Bandeja 24 uds)",
+    "format": {
+      "mode": "units",
+      "qty": 24,
+      "unit": "uds"
+    }
+  },
+  "ar-ndano-225-gr": {
+    "displayName": "Arándanos Frescos (Tarrina 225 g)",
+    "format": {
+      "mode": "weight",
+      "qty": 225,
+      "unit": "g"
+    }
+  },
+  "burger-m-cerdo-500g": {
+    "displayName": "Hamburguesas Burger Meat de Cerdo (Bandeja 500 g)",
+    "format": {
+      "mode": "weight",
+      "qty": 500,
+      "unit": "g"
+    }
+  },
+  "burger-m-pollo-500gr": {
+    "displayName": "Hamburguesas Burger Meat de Pollo (Bandeja 500 g)",
+    "format": {
+      "mode": "weight",
+      "qty": 500,
+      "unit": "g"
+    }
+  },
+  "burger-m-va-ce-1000g": {
+    "displayName": "Hamburguesas Burger Meat Vacuno y Cerdo (Bandeja 1 kg)",
+    "format": {
+      "mode": "weight",
+      "qty": 1,
+      "unit": "kg"
+    }
+  },
+  "cacao-soluble-1kg": {
+    "displayName": "Cacao Soluble Tradicional Hacendado (Bote 1 kg)",
+    "format": {
+      "mode": "weight",
+      "qty": 1,
+      "unit": "kg"
+    }
+  },
+  "cebolla-2-kg": {
+    "displayName": "Cebollas Amarillas (Malla 2 kg)",
+    "format": {
+      "mode": "weight",
+      "qty": 2,
+      "unit": "kg"
+    }
+  },
+  "patata-3-kg": {
+    "displayName": "Patatas Variedad Tradicional (Malla 3 kg)",
+    "format": {
+      "mode": "weight",
+      "qty": 3,
+      "unit": "kg"
+    }
+  },
+  "patata-freir-m--2kg": {
+    "displayName": "Patatas Especial Freír (Malla 2 kg)",
+    "format": {
+      "mode": "weight",
+      "qty": 2,
+      "unit": "kg"
+    }
+  },
+  "patata-malla-2-kg": {
+    "displayName": "Patatas Lavadas (Malla 2 kg)",
+    "format": {
+      "mode": "weight",
+      "qty": 2,
+      "unit": "kg"
+    }
+  },
+  "zanahoria-500-g": {
+    "displayName": "Zanahorias Frescas (Malla 500 g)",
+    "format": {
+      "mode": "weight",
+      "qty": 500,
+      "unit": "g"
+    }
+  },
+  "bronchales-1-5l": {
+    "displayName": "Agua Mineral Natural Bronchales (Botella 1,5 L)",
+    "format": {
+      "mode": "weight",
+      "qty": 1.5,
+      "unit": "L",
+      "isVolume": true
+    }
+  },
+  "bronchales-6x1-5l": {
+    "displayName": "Agua Mineral Natural Bronchales (Pack 6x1,5 L - 9 Litros)",
+    "format": {
+      "mode": "weight",
+      "qty": 9,
+      "unit": "L",
+      "isVolume": true
+    }
+  },
+  "cerveza-clasica-p-12": {
+    "displayName": "Cerveza Clásica Steinburg (Pack 12 latas)",
+    "format": {
+      "mode": "units",
+      "qty": 12,
+      "unit": "uds"
+    }
+  },
+  "cola-normal-p6-latas": {
+    "displayName": "Refresco Cola Hacendado (Pack 6 latas)",
+    "format": {
+      "mode": "units",
+      "qty": 6,
+      "unit": "uds"
+    }
+  },
+  "coca-cola-zero-4l": {
+    "displayName": "Coca-Cola Zero Azúcar (Pack 2x2 L - 4 Litros)",
+    "format": {
+      "mode": "weight",
+      "qty": 4,
+      "unit": "L",
+      "isVolume": true
+    }
+  }
+}
