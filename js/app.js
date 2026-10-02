@@ -3,7 +3,7 @@
  */
 
 import { parseExcelWorkbook } from './excel-parser.js';
-import { SupermarketComparator, detectProductFormat } from './comparator.js';
+import { SupermarketComparator, detectProductFormat, calculateProductUnitPrice } from './comparator.js';
 import { renderPriceChart, destroyActiveChart } from './chart-manager.js';
 import { GitHubSyncManager } from './github-sync.js';
 
@@ -28,6 +28,7 @@ class MercadonaApp {
     this.activeProduct = null;
     this.selectedCompetitor = 'Carrefour';
     this.compMode = 'direct'; // 'direct' | 'weight' | 'units'
+    this.customizations = {};
 
     this.init();
   }
@@ -35,9 +36,131 @@ class MercadonaApp {
   async init() {
     this.initTheme();
     this.checkTokenInUrl();
-    this.setupEventListeners();
+    await this.loadCustomizations();
     await this.loadData();
+    await this.loadCompetitorHistory();
+    this.setupEventListeners();
     this.renderAll();
+  }
+
+  /* ========================================================================
+     GESTIÓN DE PERSONALIZACIONES (NOMBRES AMIGABLES Y FORMATOS POR DEFECTO)
+     ======================================================================== */
+  async loadCustomizations() {
+    try {
+      const stored = localStorage.getItem('mercadona_product_customizations');
+      if (stored) {
+        this.customizations = JSON.parse(stored) || {};
+      }
+    } catch (e) {
+      this.customizations = {};
+    }
+
+    try {
+      const resp = await fetch('data/productos_personalizados.json?t=' + Date.now());
+      if (resp.ok) {
+        const fileData = await resp.json();
+        if (fileData && typeof fileData === 'object') {
+          // Fusionar con local (local tiene prioridad de cambios recientes)
+          this.customizations = { ...fileData, ...this.customizations };
+          localStorage.setItem('mercadona_product_customizations', JSON.stringify(this.customizations));
+        }
+      }
+    } catch (err) {
+      console.log('No se pudo leer data/productos_personalizados.json localmente, usando caché.');
+    }
+  }
+
+  saveCustomization(productId, data) {
+    if (!productId) return;
+    const current = this.customizations[productId] || {};
+    this.customizations[productId] = {
+      ...current,
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+    try {
+      localStorage.setItem('mercadona_product_customizations', JSON.stringify(this.customizations));
+    } catch (e) {
+      console.warn('Error al guardar personalización en localStorage:', e);
+    }
+  }
+
+  getDisplayName(product) {
+    if (!product) return '';
+    const custom = this.customizations[product.id] || this.customizations[product.name?.toUpperCase()?.trim()];
+    if (custom && custom.displayName && custom.displayName.trim().length > 0) {
+      return custom.displayName.trim();
+    }
+    return product.name;
+  }
+
+  getProductFormat(product) {
+    if (!product) return { mode: 'direct', qty: 1, unit: 'envase' };
+    const custom = this.customizations[product.id] || this.customizations[product.name?.toUpperCase()?.trim()];
+    if (custom && custom.format && custom.format.mode) {
+      return custom.format;
+    }
+    // Detección automática desde el nombre original del ticket
+    return detectProductFormat(product.name);
+  }
+
+  autoSaveMercadonaFormatFromInputs() {
+    const prod = this.comparator.selectedProduct;
+    if (!prod) return;
+
+    if (this.compMode === 'weight') {
+      let q = parseFloat(document.getElementById('merc-weight-qty')?.value);
+      const u = document.getElementById('merc-weight-unit')?.value || 'g';
+      if ((isNaN(q) || q <= 0) && document.getElementById('comp-weight-qty')?.value) {
+        q = parseFloat(document.getElementById('comp-weight-qty')?.value);
+        const mInput = document.getElementById('merc-weight-qty');
+        if (mInput && !isNaN(q)) mInput.value = q;
+      }
+      if (!isNaN(q) && q > 0 && u) {
+        this.saveCustomization(prod.id, {
+          format: { mode: 'weight', qty: q, unit: u }
+        });
+      }
+    } else if (this.compMode === 'units') {
+      let q = parseFloat(document.getElementById('merc-units-qty')?.value);
+      if ((isNaN(q) || q <= 0) && document.getElementById('comp-units-qty')?.value) {
+        q = parseFloat(document.getElementById('comp-units-qty')?.value);
+        const mInput = document.getElementById('merc-units-qty');
+        if (mInput && !isNaN(q)) mInput.value = q;
+      }
+      if (!isNaN(q) && q > 0) {
+        this.saveCustomization(prod.id, {
+          format: { mode: 'units', qty: q, unit: 'uds' }
+        });
+      }
+    }
+  }
+
+  async loadCompetitorHistory() {
+    try {
+      const historyRes = await this.githubSync.fetchCompetitorHistory();
+      const records = historyRes?.data?.records || historyRes?.records || [];
+      if (Array.isArray(records) && records.length > 0) {
+        const localSaved = this.comparator.savedComparisons || [];
+        const idSet = new Set(localSaved.map(r => r.id));
+        let added = false;
+        for (const rec of records) {
+          if (!idSet.has(rec.id)) {
+            localSaved.push(rec);
+            idSet.add(rec.id);
+            added = true;
+          }
+        }
+        if (added) {
+          localSaved.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+          this.comparator.savedComparisons = localSaved;
+          this.comparator.persistSavedComparisons();
+        }
+      }
+    } catch (err) {
+      console.warn('Error cargando historial de competencia:', err);
+    }
   }
 
   checkTokenInUrl() {
@@ -459,13 +582,16 @@ class MercadonaApp {
   getFilteredAndSortedProducts() {
     let list = [...(this.data.products || [])];
 
-    // 1. Filtro por búsqueda
+    // 1. Filtro por búsqueda (busca en nombre amigable, ticket original y categoría)
     if (this.filters.search) {
       const q = this.filters.search.toUpperCase();
       const tokens = q.split(/\s+/).filter(Boolean);
       list = list.filter(p => {
-        const name = p.name.toUpperCase();
-        return tokens.every(tok => name.includes(tok));
+        const ticketName = p.name.toUpperCase();
+        const dispName = this.getDisplayName(p).toUpperCase();
+        const cat = (p.category || '').toUpperCase();
+        const combined = `${dispName} ${ticketName} ${cat}`;
+        return tokens.every(tok => combined.includes(tok));
       });
     }
 
@@ -493,7 +619,7 @@ class MercadonaApp {
       if (sort === 'price-asc') return a.lastPrice - b.lastPrice;
       if (sort === 'price-desc') return b.lastPrice - a.lastPrice;
       if (sort === 'diff-desc') return (b.changeMinPct || 0) - (a.changeMinPct || 0);
-      if (sort === 'name-asc') return a.name.localeCompare(b.name, 'es');
+      if (sort === 'name-asc') return this.getDisplayName(a).localeCompare(this.getDisplayName(b), 'es');
       return 0;
     });
 
@@ -538,6 +664,11 @@ class MercadonaApp {
       card.className = 'product-card';
       card.setAttribute('data-id', prod.id);
 
+      const displayName = this.getDisplayName(prod);
+      const isCustom = displayName !== prod.name;
+      const format = this.getProductFormat(prod);
+      const unitInfo = calculateProductUnitPrice(prod.lastPrice, format);
+
       // Trend tag
       let trendHtml = '';
       if (prod.trend === 'up') {
@@ -566,6 +697,13 @@ class MercadonaApp {
         `;
       }
 
+      // Badge de precio unitario (€/kg, €/L, €/ud)
+      const unitPriceBadgeHtml = unitInfo ? `
+        <span class="card-unit-price-badge" title="Precio unitario de referencia en Mercadona">
+          🏷️ ${unitInfo.formatted}
+        </span>
+      ` : '';
+
       card.innerHTML = `
         <div>
           <div class="card-header">
@@ -573,12 +711,16 @@ class MercadonaApp {
             <span class="card-purchases-badge" title="Veces comprado">🛒 ${prod.totalPurchases} ${prod.totalPurchases === 1 ? 'ticket' : 'tickets'}</span>
           </div>
 
-          <h3 class="card-title" title="${prod.name}">${prod.name}</h3>
+          <h3 class="card-title" title="${displayName}">${displayName}</h3>
+          ${isCustom ? `<span class="card-ticket-name" title="Nombre en el ticket de compra">🧾 ${prod.name}</span>` : ''}
 
           <div class="card-price-hero">
             <div class="price-main-box">
               <span class="price-main-label">Último Precio (${prod.lastDate})</span>
-              <span class="price-main-value">${prod.lastPrice.toFixed(2)} €</span>
+              <div style="display: flex; align-items: baseline; gap: 0.45rem; flex-wrap: wrap;">
+                <span class="price-main-value">${prod.lastPrice.toFixed(2)} €</span>
+                ${unitPriceBadgeHtml}
+              </div>
             </div>
             ${trendHtml}
           </div>
@@ -659,10 +801,21 @@ class MercadonaApp {
       const tr = document.createElement('tr');
       tr.style.cursor = 'pointer';
 
+      const displayName = this.getDisplayName(prod);
+      const isCustom = displayName !== prod.name;
+      const format = this.getProductFormat(prod);
+      const unitInfo = calculateProductUnitPrice(prod.lastPrice, format);
+
       tr.innerHTML = `
-        <td style="font-weight: 700;">${prod.name}</td>
+        <td>
+          <strong style="color: var(--text-primary); font-size: 0.95rem;">${displayName}</strong>
+          ${isCustom ? `<div class="table-ticket-sub">🧾 ${prod.name}</div>` : ''}
+        </td>
         <td><span class="card-category-badge">${prod.category}</span></td>
-        <td style="font-weight: 800; color: var(--primary); font-size: 1rem;">${prod.lastPrice.toFixed(2)} €</td>
+        <td>
+          <div style="font-weight: 800; color: var(--primary); font-size: 1rem;">${prod.lastPrice.toFixed(2)} €</div>
+          ${unitInfo ? `<span class="table-unit-price-tag">🏷️ ${unitInfo.formatted}</span>` : ''}
+        </td>
         <td style="color: var(--success); font-weight: 600;">${prod.minPrice.toFixed(2)} €</td>
         <td style="color: var(--danger); font-weight: 600;">${prod.maxPrice.toFixed(2)} €</td>
         <td>${prod.avgPrice.toFixed(2)} €</td>
@@ -694,7 +847,12 @@ class MercadonaApp {
     const modal = document.getElementById('product-detail-modal');
     if (!modal) return;
 
-    document.getElementById('modal-product-title').textContent = product.name;
+    const displayName = this.getDisplayName(product);
+    const titleEl = document.getElementById('modal-product-title');
+    const ticketSub = document.getElementById('modal-product-ticket-name');
+    if (titleEl) titleEl.textContent = displayName;
+    if (ticketSub) ticketSub.textContent = `Ticket original: ${product.name}`;
+
     document.getElementById('modal-product-cat').textContent = product.category;
 
     document.getElementById('modal-stat-last').textContent = `${product.lastPrice.toFixed(2)} €`;
@@ -715,6 +873,60 @@ class MercadonaApp {
       changeMinEl.textContent = changeMin > 0 ? `+${changeMin}%` : 'En mínimo';
       changeMinEl.style.color = changeMin > 0 ? 'var(--danger)' : 'var(--success)';
     }
+
+    // Configurar edición de nombre para mostrar
+    const editNameBtn = document.getElementById('modal-edit-name-btn');
+    const saveNameBtn = document.getElementById('modal-save-name-btn');
+    const resetNameBtn = document.getElementById('modal-reset-name-btn');
+    const cancelNameBtn = document.getElementById('modal-cancel-name-btn');
+    const nameEditForm = document.getElementById('modal-name-edit-form');
+    const nameInput = document.getElementById('modal-edit-name-input');
+
+    if (nameEditForm) nameEditForm.style.display = 'none';
+
+    if (editNameBtn && nameEditForm && nameInput) {
+      editNameBtn.onclick = () => {
+        const isHidden = nameEditForm.style.display === 'none';
+        nameEditForm.style.display = isHidden ? 'block' : 'none';
+        if (isHidden) {
+          nameInput.value = this.getDisplayName(product);
+          nameInput.focus();
+        }
+      };
+
+      if (cancelNameBtn) {
+        cancelNameBtn.onclick = () => {
+          nameEditForm.style.display = 'none';
+        };
+      }
+
+      if (saveNameBtn) {
+        saveNameBtn.onclick = () => {
+          const newName = nameInput.value.trim();
+          if (newName.length > 0) {
+            this.saveCustomization(product.id, { displayName: newName });
+            if (titleEl) titleEl.textContent = newName;
+            nameEditForm.style.display = 'none';
+            this.renderProductsList();
+          }
+        };
+      }
+
+      if (resetNameBtn) {
+        resetNameBtn.onclick = () => {
+          this.saveCustomization(product.id, { displayName: '' });
+          if (titleEl) titleEl.textContent = product.name;
+          nameEditForm.style.display = 'none';
+          this.renderProductsList();
+        };
+      }
+    }
+
+    // Configurar formato por defecto (peso/volumen/unidades) en Mercadona
+    this.renderModalFormatSection(product);
+
+    // Comparativa de todos los supermercados registrados para este producto
+    this.renderModalSupermarketRanking(product);
 
     // Renderizar gráfico con Chart.js
     const canvas = document.getElementById('product-price-chart');
@@ -750,7 +962,7 @@ class MercadonaApp {
     const tbody = document.getElementById('modal-history-tbody');
     if (tbody) {
       tbody.innerHTML = '';
-      const history = [...(product.history || [])].reverse(); // del más reciente al más antiguo
+      const history = [...(product.history || [])].reverse();
 
       history.forEach((item, idx) => {
         const tr = document.createElement('tr');
@@ -779,6 +991,123 @@ class MercadonaApp {
 
     modal.classList.add('open');
     modal.setAttribute('aria-hidden', 'false');
+  }
+
+  renderModalFormatSection(product) {
+    const format = this.getProductFormat(product);
+    const badgeEl = document.getElementById('modal-format-badge');
+    const uPriceEl = document.getElementById('modal-unit-price-badge');
+    const formEl = document.getElementById('modal-format-edit-form');
+    const editBtn = document.getElementById('modal-edit-format-btn');
+    const saveBtn = document.getElementById('modal-save-format-btn');
+    const cancelBtn = document.getElementById('modal-cancel-format-btn');
+
+    if (!badgeEl) return;
+    if (formEl) formEl.style.display = 'none';
+
+    // Texto del badge
+    if (format.mode === 'weight') {
+      badgeEl.textContent = `⚖️ ${format.qty} ${format.unit}`;
+    } else if (format.mode === 'units') {
+      badgeEl.textContent = `🔢 ${format.qty} uds`;
+    } else {
+      badgeEl.textContent = `📦 Envase directo (sin peso)`;
+    }
+
+    // Precio unitario
+    const uInfo = calculateProductUnitPrice(product.lastPrice, format);
+    if (uPriceEl) {
+      if (uInfo) {
+        uPriceEl.textContent = `🏷️ ${uInfo.formatted}`;
+        uPriceEl.style.display = 'inline-block';
+      } else {
+        uPriceEl.style.display = 'none';
+      }
+    }
+
+    // Configurar listeners de edición del formato
+    if (editBtn && formEl) {
+      editBtn.onclick = () => {
+        const isHidden = formEl.style.display === 'none';
+        formEl.style.display = isHidden ? 'block' : 'none';
+        if (isHidden) {
+          const modeRadio = formEl.querySelector(`input[name="modal-fmt-mode"][value="${format.mode || 'direct'}"]`);
+          if (modeRadio) modeRadio.checked = true;
+          this.toggleModalFormatModeInputs(format.mode || 'direct');
+
+          if (format.mode === 'weight') {
+            const qEl = document.getElementById('modal-fmt-qty');
+            const uEl = document.getElementById('modal-fmt-unit');
+            if (qEl) qEl.value = format.qty || 1;
+            if (uEl) uEl.value = format.unit || 'g';
+          } else if (format.mode === 'units') {
+            const qEl = document.getElementById('modal-fmt-units-qty');
+            if (qEl) qEl.value = format.qty || 1;
+          }
+        }
+      };
+    }
+
+    formEl?.querySelectorAll('input[name="modal-fmt-mode"]').forEach(radio => {
+      radio.onchange = (e) => {
+        this.toggleModalFormatModeInputs(e.target.value);
+      };
+    });
+
+    if (cancelBtn && formEl) {
+      cancelBtn.onclick = () => {
+        formEl.style.display = 'none';
+      };
+    }
+
+    if (saveBtn && formEl) {
+      saveBtn.onclick = () => {
+        const selectedMode = formEl.querySelector('input[name="modal-fmt-mode"]:checked')?.value || 'direct';
+        let newFormat = { mode: selectedMode, qty: 1, unit: 'envase' };
+
+        if (selectedMode === 'weight') {
+          const q = parseFloat(document.getElementById('modal-fmt-qty')?.value || 1);
+          const u = document.getElementById('modal-fmt-unit')?.value || 'g';
+          newFormat = { mode: 'weight', qty: q, unit: u };
+        } else if (selectedMode === 'units') {
+          const q = parseFloat(document.getElementById('modal-fmt-units-qty')?.value || 1);
+          newFormat = { mode: 'units', qty: q, unit: 'uds' };
+        }
+
+        this.saveCustomization(product.id, { format: newFormat });
+        formEl.style.display = 'none';
+        this.renderModalFormatSection(product);
+        this.renderModalSupermarketRanking(product);
+        this.renderProductsList();
+      };
+    }
+  }
+
+  toggleModalFormatModeInputs(mode) {
+    const weightInputs = document.getElementById('modal-fmt-inputs-weight');
+    const unitsInputs = document.getElementById('modal-fmt-inputs-units');
+    if (weightInputs) weightInputs.style.display = mode === 'weight' ? 'flex' : 'none';
+    if (unitsInputs) unitsInputs.style.display = mode === 'units' ? 'flex' : 'none';
+  }
+
+  renderModalSupermarketRanking(product) {
+    const listEl = document.getElementById('modal-supermarket-ranking-list');
+    if (!listEl) return;
+
+    const format = this.getProductFormat(product);
+    const ranking = this.comparator.getSupermarketRanking(product, format);
+
+    if (ranking.length <= 1) {
+      listEl.innerHTML = `
+        <div style="font-size: 0.84rem; color: var(--text-muted); padding: 0.5rem 0;">
+          Solo tienes registrado el precio de Mercadona (${product.lastPrice.toFixed(2)} €).
+          Cuando compares en <strong>Family Cash, Carrefour, Lidl, etc.</strong> y guardes la comparativa, aparecerá aquí el ranking completo.
+        </div>
+      `;
+      return;
+    }
+
+    listEl.innerHTML = ranking.map(item => this.createSupermarketRankingRowHtml(item)).join('');
   }
 
   closeProductModal() {
@@ -835,19 +1164,34 @@ class MercadonaApp {
         return;
       }
 
-      const matches = this.data.products.filter(p => p.name.toUpperCase().includes(q)).slice(0, 8);
+      const matches = this.data.products.filter(p => {
+        const dName = this.getDisplayName(p).toUpperCase();
+        return dName.includes(q) || p.name.toUpperCase().includes(q);
+      }).slice(0, 8);
+
       if (dropdown) {
         if (matches.length > 0) {
           dropdown.style.display = 'block';
-          dropdown.innerHTML = matches.map(p => `
-            <div class="dropdown-item" data-id="${p.id}" style="padding: 0.65rem 0.85rem; cursor: pointer; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
-              <div>
-                <strong>${p.name}</strong>
-                <div style="font-size: 0.76rem; color: var(--text-muted);">${p.category}</div>
+          dropdown.innerHTML = matches.map(p => {
+            const displayName = this.getDisplayName(p);
+            const isCustom = displayName !== p.name;
+            const format = this.getProductFormat(p);
+            const unitInfo = calculateProductUnitPrice(p.lastPrice, format);
+
+            return `
+              <div class="dropdown-item" data-id="${p.id}" style="padding: 0.65rem 0.85rem; cursor: pointer; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <strong>${displayName}</strong>
+                  ${isCustom ? `<div style="font-size: 0.74rem; color: var(--text-muted);">Ticket: ${p.name}</div>` : ''}
+                  <div style="font-size: 0.76rem; color: var(--text-muted);">${p.category}</div>
+                </div>
+                <div style="text-align: right;">
+                  <span style="font-weight: 800; color: var(--primary);">${p.lastPrice.toFixed(2)} €</span>
+                  ${unitInfo ? `<div style="font-size: 0.74rem; color: var(--text-secondary); font-weight: 600;">${unitInfo.formatted}</div>` : ''}
+                </div>
               </div>
-              <span style="font-weight: 800; color: var(--primary);">${p.lastPrice.toFixed(2)} €</span>
-            </div>
-          `).join('');
+            `;
+          }).join('');
 
           dropdown.querySelectorAll('.dropdown-item').forEach(item => {
             item.addEventListener('click', () => {
@@ -872,36 +1216,91 @@ class MercadonaApp {
       }
     });
 
-    // Inputs que disparan recálculo inmediato
+    // Inputs que disparan recálculo inmediato y auto-guardado
     priceInput?.addEventListener('input', () => this.triggerComparisonCalculation());
     
     // Peso / Volumen inputs
-    document.getElementById('merc-weight-qty')?.addEventListener('input', () => this.triggerComparisonCalculation());
-    document.getElementById('merc-weight-unit')?.addEventListener('change', () => this.triggerComparisonCalculation());
-    document.getElementById('comp-weight-qty')?.addEventListener('input', () => this.triggerComparisonCalculation());
-    document.getElementById('comp-weight-unit')?.addEventListener('change', () => this.triggerComparisonCalculation());
+    document.getElementById('merc-weight-qty')?.addEventListener('input', () => {
+      this.autoSaveMercadonaFormatFromInputs();
+      this.triggerComparisonCalculation();
+    });
+    document.getElementById('merc-weight-unit')?.addEventListener('change', () => {
+      this.autoSaveMercadonaFormatFromInputs();
+      this.triggerComparisonCalculation();
+    });
+    document.getElementById('comp-weight-qty')?.addEventListener('input', () => {
+      const prod = this.comparator.selectedProduct;
+      if (prod) {
+        const currentFmt = this.getProductFormat(prod);
+        if (currentFmt.mode === 'direct') {
+          const cVal = document.getElementById('comp-weight-qty')?.value;
+          const mInput = document.getElementById('merc-weight-qty');
+          const cUnit = document.getElementById('comp-weight-unit')?.value;
+          const mUnit = document.getElementById('merc-weight-unit');
+          if (mInput && cVal) mInput.value = cVal;
+          if (mUnit && cUnit) mUnit.value = cUnit;
+          this.autoSaveMercadonaFormatFromInputs();
+        }
+      }
+      this.triggerComparisonCalculation();
+    });
+
+    document.getElementById('comp-weight-unit')?.addEventListener('change', () => {
+      const prod = this.comparator.selectedProduct;
+      if (prod) {
+        const currentFmt = this.getProductFormat(prod);
+        if (currentFmt.mode === 'direct') {
+          const cUnit = document.getElementById('comp-weight-unit')?.value;
+          const mUnit = document.getElementById('merc-weight-unit');
+          if (mUnit && cUnit) mUnit.value = cUnit;
+          this.autoSaveMercadonaFormatFromInputs();
+        }
+      }
+      this.triggerComparisonCalculation();
+    });
 
     // Unidades inputs
-    document.getElementById('merc-units-qty')?.addEventListener('input', () => this.triggerComparisonCalculation());
-    document.getElementById('comp-units-qty')?.addEventListener('input', () => this.triggerComparisonCalculation());
+    document.getElementById('merc-units-qty')?.addEventListener('input', () => {
+      this.autoSaveMercadonaFormatFromInputs();
+      this.triggerComparisonCalculation();
+    });
+
+    document.getElementById('comp-units-qty')?.addEventListener('input', () => {
+      const prod = this.comparator.selectedProduct;
+      if (prod) {
+        const currentFmt = this.getProductFormat(prod);
+        if (currentFmt.mode === 'direct') {
+          const cVal = document.getElementById('comp-units-qty')?.value;
+          const mInput = document.getElementById('merc-units-qty');
+          if (mInput && cVal) mInput.value = cVal;
+          this.autoSaveMercadonaFormatFromInputs();
+        }
+      }
+      this.triggerComparisonCalculation();
+    });
 
     // Save comparison button
     document.getElementById('btn-save-comparison')?.addEventListener('click', async () => {
       const result = this.lastCalcResult;
       if (result && !result.error) {
+        this.autoSaveMercadonaFormatFromInputs();
         const savedItem = this.comparator.saveComparison(result);
         this.renderBasketSidebar();
+        this.renderComparatorSupermarketRanking(null);
+        this.renderProductsList();
+
+        const dispName = this.getDisplayName(result.product);
 
         if (this.githubSync.config.autoSync && this.githubSync.isConfigured()) {
           try {
             await this.githubSync.syncToGitHub([savedItem]);
-            alert(`✅ Guardado en tu cesta y sincronizado automáticamente en GitHub (commit en data/precios_competencia.json):\n${result.product.name} en ${result.competitorName}`);
+            alert(`✅ Guardado en tu cesta y registrado en ${result.competitorName}:\n${dispName}`);
           } catch (syncErr) {
             console.warn('Error al auto-sincronizar con GitHub:', syncErr);
-            alert(`✅ Guardado localmente en tu cesta.\n(Nota: No se pudo subir a GitHub: ${syncErr.message}. Puedes sincronizarlo luego con el botón ☁️).`);
+            alert(`✅ Guardado localmente en tu cesta.\n(${syncErr.message})`);
           }
         } else {
-          alert(`✅ Guardado en tu cesta: ${result.product.name} (${result.competitorName})`);
+          alert(`✅ Guardado en tu cesta: ${dispName} (${result.competitorName})`);
         }
       }
     });
@@ -948,6 +1347,7 @@ class MercadonaApp {
       if (confirm('¿Vaciar la lista de comparativas de esta compra?')) {
         this.comparator.clearComparisons();
         this.renderBasketSidebar();
+        this.renderComparatorSupermarketRanking(null);
       }
     });
   }
@@ -993,39 +1393,42 @@ class MercadonaApp {
 
   setupComparatorWithProduct(product) {
     this.comparator.selectProduct(product.id);
+    const displayName = this.getDisplayName(product);
     const searchInput = document.getElementById('comp-product-search');
-    if (searchInput) searchInput.value = product.name;
+    if (searchInput) searchInput.value = displayName;
 
     const priceEl = document.getElementById('comp-mercadona-price');
     const detailsEl = document.getElementById('comp-mercadona-details');
 
     if (priceEl) priceEl.textContent = `${product.lastPrice.toFixed(2)} €`;
     if (detailsEl) {
+      const isCustom = displayName !== product.name;
       detailsEl.innerHTML = `
+        ${isCustom ? `<div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.2rem;">Ticket: ${product.name}</div>` : ''}
         Último: ${product.lastDate} | Mínimo: <strong>${product.minPrice.toFixed(2)} €</strong> | Media: ${product.avgPrice.toFixed(2)} €
       `;
     }
 
-    // Detección automática de formato a partir del nombre del producto
-    const detected = detectProductFormat(product.name);
-    this.compMode = detected.mode || 'direct';
+    // Usar formato por defecto guardado o detectado del producto
+    const format = this.getProductFormat(product);
+    this.compMode = format.mode || 'direct';
 
-    if (detected.mode === 'weight') {
+    if (format.mode === 'weight') {
       const mWeightQty = document.getElementById('merc-weight-qty');
       const mWeightUnit = document.getElementById('merc-weight-unit');
       const cWeightQty = document.getElementById('comp-weight-qty');
       const cWeightUnit = document.getElementById('comp-weight-unit');
 
-      if (mWeightQty) mWeightQty.value = detected.qty;
-      if (mWeightUnit) mWeightUnit.value = detected.unit;
-      if (cWeightQty) cWeightQty.value = detected.qty;
-      if (cWeightUnit) cWeightUnit.value = detected.unit;
-    } else if (detected.mode === 'units') {
+      if (mWeightQty) mWeightQty.value = format.qty;
+      if (mWeightUnit) mWeightUnit.value = format.unit;
+      if (cWeightQty) cWeightQty.value = format.qty;
+      if (cWeightUnit) cWeightUnit.value = format.unit;
+    } else if (format.mode === 'units') {
       const mUnitsQty = document.getElementById('merc-units-qty');
       const cUnitsQty = document.getElementById('comp-units-qty');
 
-      if (mUnitsQty) mUnitsQty.value = detected.qty;
-      if (cUnitsQty) cUnitsQty.value = detected.qty;
+      if (mUnitsQty) mUnitsQty.value = format.qty;
+      if (cUnitsQty) cUnitsQty.value = format.qty;
     }
 
     this.updateComparatorModeUI();
@@ -1036,6 +1439,7 @@ class MercadonaApp {
     }
 
     this.triggerComparisonCalculation();
+    this.renderComparatorSupermarketRanking(null);
   }
 
   triggerComparisonCalculation() {
@@ -1050,6 +1454,7 @@ class MercadonaApp {
       if (banner) banner.style.display = 'none';
       if (actions) actions.style.display = 'none';
       if (normSummary) normSummary.style.display = 'none';
+      this.renderComparatorSupermarketRanking(null);
       return;
     }
 
@@ -1077,6 +1482,7 @@ class MercadonaApp {
       if (banner) banner.style.display = 'none';
       if (actions) actions.style.display = 'none';
       if (normSummary) normSummary.style.display = 'none';
+      this.renderComparatorSupermarketRanking(null);
       return;
     }
 
@@ -1160,6 +1566,86 @@ class MercadonaApp {
     }
 
     if (actions) actions.style.display = 'flex';
+
+    // Actualizar ranking comparativo multi-supermercado en vivo con este cálculo
+    this.renderComparatorSupermarketRanking(result);
+  }
+
+  renderComparatorSupermarketRanking(currentCalcResult = null) {
+    const card = document.getElementById('comp-ranking-card');
+    const listEl = document.getElementById('comp-supermarket-ranking-list');
+    const prodNameEl = document.getElementById('comp-ranking-prod-name');
+    const unitTypeEl = document.getElementById('comp-ranking-unit-type');
+
+    if (!card || !listEl) return;
+
+    const prod = this.comparator.selectedProduct;
+    if (!prod) {
+      card.style.display = 'none';
+      return;
+    }
+
+    const format = this.getProductFormat(prod);
+    const ranking = this.comparator.getSupermarketRanking(prod, format, currentCalcResult);
+
+    // Si solo está Mercadona y no hay cálculo en directo con precio válido
+    if (ranking.length <= 1 && (!currentCalcResult || currentCalcResult.error)) {
+      card.style.display = 'none';
+      return;
+    }
+
+    card.style.display = 'block';
+    if (prodNameEl) prodNameEl.textContent = this.getDisplayName(prod);
+    if (unitTypeEl) {
+      const uLabel = ranking[0]?.unitLabel || 'unidad';
+      unitTypeEl.textContent = uLabel === 'envase' ? 'envase' : `€/${uLabel}`;
+    }
+
+    listEl.innerHTML = ranking.map(item => this.createSupermarketRankingRowHtml(item)).join('');
+  }
+
+  createSupermarketRankingRowHtml(item) {
+    const isWinner = item.isWinner;
+    const itemClass = `super-rank-item ${isWinner ? 'winner' : ''} ${item.isMercadona ? 'is-mercadona' : ''}`;
+    const diffClass = isWinner ? 'winner-diff' : 'more-diff';
+    const tag = item.isLivePreview 
+      ? '<span style="font-size:0.7rem; color:var(--accent-gold); font-weight:700;">(En directo)</span>'
+      : (item.isMercadona ? '<span style="font-size:0.7rem; color:var(--primary); font-weight:700;">(Referencia)</span>' : '');
+
+    return `
+      <div class="${itemClass}">
+        <div class="super-rank-left">
+          <div class="super-rank-medal">${item.medal}</div>
+          <div class="super-rank-info">
+            <span class="super-rank-name">
+              ${this.getSupermarketIcon(item.supermarket)} ${item.supermarket} ${tag}
+            </span>
+            <span class="super-rank-date">
+              ${item.isMercadona ? `Ticket: ${item.date}` : `Registrado: ${item.date}`}
+              ${item.detailLabel ? ` · ${item.detailLabel}` : ''}
+            </span>
+          </div>
+        </div>
+        <div class="super-rank-right">
+          <span class="super-rank-unit-price">${item.formattedUnitPrice}</span>
+          <span class="super-rank-diff ${diffClass}">${item.diffText}</span>
+          <span class="super-rank-package">${item.price.toFixed(2)} €/envase</span>
+        </div>
+      </div>
+    `;
+  }
+
+  getSupermarketIcon(name) {
+    const n = (name || '').toLowerCase();
+    if (n.includes('mercadona')) return '🟢';
+    if (n.includes('carrefour')) return '🔵';
+    if (n.includes('lidl')) return '🟡';
+    if (n.includes('family cash') || n.includes('familycash')) return '🔴';
+    if (n.includes('dia')) return '🔴';
+    if (n.includes('aldi')) return '🔷';
+    if (n.includes('alcampo')) return '🔴';
+    if (n.includes('consum')) return '🟠';
+    return '🏪';
   }
 
   renderBasketSidebar() {

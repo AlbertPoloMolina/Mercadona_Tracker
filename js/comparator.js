@@ -32,46 +32,116 @@ export function normalizeWeightVolume(qty, unit) {
  * Detecta automáticamente si el nombre de un producto sugiere peso, volumen o unidades
  */
 export function detectProductFormat(name) {
-  if (!name) return { mode: 'direct', qty: 1, unit: 'ud' };
+  if (!name) return { mode: 'direct', qty: 1, unit: 'envase' };
   const upper = name.toUpperCase();
 
-  // Volumen: 1,5L, 1L, 330ML, 500ML
-  const mVol = upper.match(/(\d+(?:[.,]\d+)?)\s*(L|ML|CL)\b/);
+  // Pack con multiplicación de volumen: 6X1,5L, 6X1L, 4X200ML, 6X33CL
+  const mMultiVol = upper.match(/(\d+)\s*[X*]\s*(\d+(?:[.,]\d+)?)\s*(L|LT|LTS|ML|CL)\b/);
+  if (mMultiVol) {
+    const count = parseInt(mMultiVol[1], 10);
+    const vol = parseFloat(mMultiVol[2].replace(',', '.'));
+    const rawUnit = mMultiVol[3];
+    const unit = rawUnit === 'ML' ? 'ml' : (rawUnit === 'CL' ? 'cl' : 'L');
+    const totalVol = Math.round(count * vol * 100) / 100;
+    return { mode: 'weight', qty: totalVol, unit, isVolume: true };
+  }
+
+  // Volumen simple: 1,5L, 1L, 330ML, 500ML, 33CL, 1 LITRO, 1.5 LITROS (no precedido de / para evitar 1/2)
+  const mVol = upper.match(/(?<!\/)(\d+(?:[.,]\d+)?)\s*(L|LT|LTS|LITROS?|ML|CL)\b/);
   if (mVol) {
     const qty = parseFloat(mVol[1].replace(',', '.'));
     const rawUnit = mVol[2];
-    const unit = rawUnit === 'ML' ? 'ml' : (rawUnit === 'CL' ? 'cl' : 'L');
-    return { mode: 'weight', qty, unit, isVolume: true };
+    if (!(rawUnit === 'L' && qty > 10)) {
+      const unit = rawUnit === 'ML' ? 'ml' : (rawUnit === 'CL' ? 'cl' : 'L');
+      return { mode: 'weight', qty, unit, isVolume: true };
+    }
   }
 
-  // Peso: 500G, 250 GR, 1KG, 1,5KG
-  const mWeight = upper.match(/(\d+(?:[.,]\d+)?)\s*(KG|G|GR)\b/);
+  // Peso: 500G, 250 GR, 1KG, 1,5KG, 500 GRS, 1 KILO, 2 KILOS (no precedido de /)
+  const mWeight = upper.match(/(?<!\/)(\d+(?:[.,]\d+)?)\s*(KG|KILOS?|KGS?|G|GR|GRS|GRAMOS)\b/);
   if (mWeight) {
     const qty = parseFloat(mWeight[1].replace(',', '.'));
-    const unit = ['G', 'GR'].includes(mWeight[2]) ? 'g' : 'kg';
+    const raw = mWeight[2];
+    const unit = ['G', 'GR', 'GRS', 'GRAMOS'].includes(raw) ? 'g' : 'kg';
     return { mode: 'weight', qty, unit, isVolume: false };
   }
 
-  // Unidades: 12 HUEVOS, 24 UNID, PACK-3, 40 B., 4 UDS
-  const mPack = upper.match(/\b(?:PACK|PK|X)\s*[-]?\s*(\d+)\b/);
+  // Unidades con prefijo: PACK-3, PACK 4, PK6, X6, X 12
+  const mPack = upper.match(/\b(?:PACK|PK|X)\s*[-]?\s*([1-9]\d*)\b/);
   if (mPack) {
     return { mode: 'units', qty: parseInt(mPack[1], 10), unit: 'uds' };
   }
 
-  const mUnits = upper.match(/(\d+)\s*(?:UDS|UNID|BOLSAS|B\.|BOCADILLOS|HUEVOS)\b/);
+  // Unidades con sufijo pack: 4 PACK, 4 PAC, 4 PK, 4PACK
+  const mPackPost = upper.match(/([1-9]\d*)\s*(?:PACK|PAC|PK)\b/);
+  if (mPackPost) {
+    return { mode: 'units', qty: parseInt(mPackPost[1], 10), unit: 'uds' };
+  }
+
+  // Abreviación P-12, P6, P3, P-2
+  const mPrefP = upper.match(/\bP[-]?([1-9]\d*)\b/);
+  if (mPrefP) {
+    const val = parseInt(mPrefP[1], 10);
+    if ([2, 3, 4, 5, 6, 8, 10, 12, 18, 24].includes(val)) {
+      return { mode: 'units', qty: val, unit: 'uds' };
+    }
+  }
+
+  // Unidades explícitas: 12 HUEVOS, 24 UNID, 6 UN, 3 U, 30H, 24 PAS, 8 RAC, 40 B., 40 BOLSAS
+  const mUnits = upper.match(/([1-9]\d*)\s*(?:UDS?|UNID\.?|UNIDADES?|UN|U|BOLSAS?|B\.|BOCADILLOS?|HUEVOS?|CAPSULAS?|DOSIS|PASTILLAS?|PAS|HOJAS?|H|RACIONES|RAC|LATAS?)\b/);
   if (mUnits) {
     return { mode: 'units', qty: parseInt(mUnits[1], 10), unit: 'uds' };
   }
 
-  const mStart = upper.match(/^(\d+)\s+([A-Z]+)/);
+  // Número común al inicio del nombre (ej: 12 HUEVOS..., 3 BOCADILLOS...)
+  const mStart = upper.match(/^([1-9]\d*)\s+([A-Z]+)/);
   if (mStart) {
     const val = parseInt(mStart[1], 10);
-    if ([2, 3, 4, 5, 6, 8, 10, 12, 18, 20, 24, 30, 40, 50].includes(val)) {
+    const word = mStart[2];
+    if ([2, 3, 4, 5, 6, 8, 10, 12, 18, 20, 24, 30, 40, 50].includes(val) && !word.endsWith('%')) {
       return { mode: 'units', qty: val, unit: 'uds' };
     }
   }
 
   return { mode: 'direct', qty: 1, unit: 'envase' };
+}
+
+/**
+ * Calcula el precio unitario (€/kg, €/L o €/ud) dado un precio y un formato (peso/volumen/unidades)
+ */
+export function calculateProductUnitPrice(price, format) {
+  const p = parseFloat(price);
+  if (isNaN(p) || p <= 0 || !format) return null;
+
+  if (format.mode === 'weight') {
+    const norm = normalizeWeightVolume(format.qty, format.unit);
+    if (!norm || norm.qtyBase <= 0) return null;
+    const unitPrice = p / norm.qtyBase;
+    const baseUnit = norm.baseUnit; // 'kg' o 'L'
+    return {
+      unitPrice: Math.round(unitPrice * 100) / 100,
+      unitPriceRaw: unitPrice,
+      unitLabel: baseUnit,
+      formatted: `${unitPrice.toFixed(2).replace('.', ',')} €/${baseUnit}`,
+      shortLabel: `€/${baseUnit}`
+    };
+  }
+
+  if (format.mode === 'units') {
+    const q = parseFloat(format.qty);
+    if (isNaN(q) || q <= 0) return null;
+    const unitPrice = p / q;
+    const decimals = unitPrice < 1 ? 3 : 2;
+    return {
+      unitPrice: Math.round(unitPrice * 1000) / 1000,
+      unitPriceRaw: unitPrice,
+      unitLabel: 'ud',
+      formatted: `${unitPrice.toFixed(decimals).replace('.', ',')} €/ud`,
+      shortLabel: '€/ud'
+    };
+  }
+
+  return null;
 }
 
 export class SupermarketComparator {
@@ -280,6 +350,10 @@ export class SupermarketComparator {
       mercadonaUnitPrice: Math.round(mercadonaUnitPrice * 1000) / 1000,
       competitorUnitPrice: Math.round(competitorUnitPrice * 1000) / 1000,
       unitLabel,
+      mercadonaQty: params.mercadonaQty || params.mercadonaUnits || 1,
+      mercadonaUnit: params.mercadonaUnit || (mode === 'units' ? 'uds' : 'envase'),
+      competitorQty: params.competitorQty || params.competitorUnits || 1,
+      competitorUnit: params.competitorUnit || (mode === 'units' ? 'uds' : 'envase'),
       diffUnitPrice: Math.round(diffUnitPrice * 1000) / 1000,
       diffPct: Math.round(diffPct * 10) / 10,
       equivalentMercadonaCost: Math.round(equivalentMercadonaCost * 100) / 100,
@@ -299,12 +373,19 @@ export class SupermarketComparator {
     const item = {
       id: 'cmp_' + Date.now(),
       timestamp: new Date().toISOString(),
+      productId: calcResult.product.id,
       productName: calcResult.product.name,
       mode: calcResult.mode,
       unitLabel: calcResult.unitLabel,
       mercadonaPrice: calcResult.mercadonaRawPrice,
+      mercadonaUnitPrice: calcResult.mercadonaUnitPrice,
+      mercadonaQty: calcResult.mercadonaQty,
+      mercadonaUnit: calcResult.mercadonaUnit,
       competitorName: calcResult.competitorName,
       competitorPrice: calcResult.competitorRawPrice,
+      competitorUnitPrice: calcResult.competitorUnitPrice,
+      competitorQty: calcResult.competitorQty,
+      competitorUnit: calcResult.competitorUnit,
       equivalentMercadonaCost: calcResult.equivalentMercadonaCost,
       actualCompetitorCost: calcResult.actualCompetitorCost,
       packageSavings: calcResult.packageSavings,
@@ -313,6 +394,7 @@ export class SupermarketComparator {
       verdict: calcResult.verdict
     };
 
+    // Si ya existía un registro idéntico reciente para este producto y competidor, actualizarlo o añadir
     this.savedComparisons.unshift(item);
     this.persistSavedComparisons();
     return item;
@@ -326,6 +408,128 @@ export class SupermarketComparator {
   clearComparisons() {
     this.savedComparisons = [];
     this.persistSavedComparisons();
+  }
+
+  /**
+   * Genera el ranking comparativo entre TODOS los supermercados registrados para un producto
+   * @param {Object} product - Producto de Mercadona
+   * @param {Object} [activeFormat] - Formato activo ({ mode, qty, unit })
+   * @param {Object} [currentCalcResult] - Resultado de cálculo en vivo (opcional, para previsualización inmediata)
+   */
+  getSupermarketRanking(product, activeFormat = null, currentCalcResult = null) {
+    if (!product) return [];
+
+    const format = activeFormat || detectProductFormat(product.name);
+    const mercUnit = calculateProductUnitPrice(product.lastPrice, format);
+
+    // 1. Entrada de Mercadona
+    const mercadonaEntry = {
+      supermarket: 'Mercadona',
+      price: product.lastPrice,
+      unitPrice: mercUnit ? mercUnit.unitPrice : product.lastPrice,
+      unitLabel: mercUnit ? mercUnit.unitLabel : 'envase',
+      formattedUnitPrice: mercUnit ? mercUnit.formatted : `${product.lastPrice.toFixed(2)} €/envase`,
+      date: product.lastDate || 'Referencia',
+      isMercadona: true,
+      isLivePreview: false
+    };
+
+    // 2. Extraer comparativas registradas de este producto
+    const prodNameUpper = (product.name || '').toUpperCase().trim();
+    const prodId = product.id;
+
+    // Agrupamos por competidor guardando solo el más reciente
+    const competitorMap = new Map();
+    const allRecords = [...(this.savedComparisons || [])];
+
+    for (const rec of allRecords) {
+      const matchName = (rec.productName || '').toUpperCase().trim() === prodNameUpper;
+      const matchId = rec.productId && rec.productId === prodId;
+      if (!matchName && !matchId) continue;
+
+      const compName = rec.competitorName || 'Competidor';
+      const existing = competitorMap.get(compName);
+      const recDate = new Date(rec.timestamp || 0).getTime();
+
+      if (!existing || recDate > existing.timestampMs) {
+        let uPrice = rec.competitorUnitPrice;
+        let uLabel = rec.unitLabel || 'envase';
+
+        if (uPrice === undefined || uPrice === null) {
+          uPrice = rec.competitorPrice;
+        }
+
+        const dateStr = rec.timestamp ? new Date(rec.timestamp).toLocaleDateString('es-ES') : 'Guardado';
+        const formattedUnitPrice = uLabel === 'envase' 
+          ? `${uPrice.toFixed(2)} €/envase` 
+          : `${uPrice.toFixed(uLabel === 'ud' && uPrice < 1 ? 3 : 2).replace('.', ',')} €/${uLabel}`;
+
+        competitorMap.set(compName, {
+          supermarket: compName,
+          price: rec.competitorPrice,
+          unitPrice: uPrice,
+          unitLabel: uLabel,
+          formattedUnitPrice,
+          date: dateStr,
+          timestampMs: recDate,
+          isMercadona: false,
+          isLivePreview: false,
+          detailLabel: rec.detailLabel || ''
+        });
+      }
+    }
+
+    // 3. Si hay un cálculo en directo para un competidor, actualizar o añadir en vivo
+    if (currentCalcResult && !currentCalcResult.error && currentCalcResult.product?.id === product.id) {
+      const liveCompName = currentCalcResult.competitorName;
+      competitorMap.set(liveCompName, {
+        supermarket: liveCompName,
+        price: currentCalcResult.competitorRawPrice,
+        unitPrice: currentCalcResult.competitorUnitPrice,
+        unitLabel: currentCalcResult.unitLabel,
+        formattedUnitPrice: currentCalcResult.unitLabel === 'envase'
+          ? `${currentCalcResult.competitorUnitPrice.toFixed(2)} €/envase`
+          : `${currentCalcResult.competitorUnitPrice.toFixed(currentCalcResult.unitLabel === 'ud' && currentCalcResult.competitorUnitPrice < 1 ? 3 : 2).replace('.', ',')} €/${currentCalcResult.unitLabel}`,
+        date: 'En directo ⚡',
+        timestampMs: Date.now() + 1000,
+        isMercadona: false,
+        isLivePreview: true,
+        detailLabel: currentCalcResult.detailLabel || ''
+      });
+    }
+
+    // Combinar Mercadona con competidores
+    const ranking = [mercadonaEntry, ...competitorMap.values()];
+
+    // Ordenar de menor a mayor precio unitario
+    ranking.sort((a, b) => a.unitPrice - b.unitPrice);
+
+    // Asignar puestos, medallas y diferencia vs el ganador
+    const winner = ranking[0];
+    const medals = ['🥇', '🥈', '🥉'];
+
+    return ranking.map((item, idx) => {
+      const isWinner = idx === 0;
+      const medal = medals[idx] || `${idx + 1}º`;
+      let diffPct = 0;
+      let diffText = '';
+
+      if (isWinner) {
+        diffText = '¡Mejor precio!';
+      } else if (winner.unitPrice > 0) {
+        diffPct = Math.round(((item.unitPrice - winner.unitPrice) / winner.unitPrice) * 1000) / 10;
+        diffText = `+${diffPct.toFixed(1)}%`;
+      }
+
+      return {
+        ...item,
+        rank: idx + 1,
+        medal,
+        isWinner,
+        diffPct,
+        diffText
+      };
+    });
   }
 
   getBasketSavingsSummary() {
