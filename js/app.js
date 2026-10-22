@@ -1916,6 +1916,110 @@ class MercadonaApp {
     const dropsList = document.getElementById('trends-drops-list');
     if (!hikesList || !dropsList) return;
 
+    const storeId = this.trendsStoreFilter || 'all';
+    const isSpecificCompetitor = storeId !== 'all' && storeId !== 'mercadona';
+
+    if (isSpecificCompetitor) {
+      const supMeta = (this.unifiedData?.supermarkets || []).find(s => s.id === storeId) || {
+        name: storeId,
+        color: '#666',
+        icon: '🏪'
+      };
+
+      // Buscar productos que tengan precio registrado en este competidor
+      const comparisons = [];
+      for (const prod of (this.data.products || [])) {
+        const offers = this.getOffersForProduct(prod);
+        const storeOffer = offers.find(o => o.supermarket_id === storeId);
+        if (storeOffer) {
+          const mPrice = prod.lastPrice;
+          const cPrice = storeOffer.last_price;
+          const diff = Math.round((cPrice - mPrice) * 100) / 100;
+          const diffPct = Math.round(((cPrice - mPrice) / mPrice) * 1000) / 10;
+          comparisons.push({
+            prod,
+            storeOffer,
+            mPrice,
+            cPrice,
+            diff,
+            diffPct,
+            isCheaper: diff < 0
+          });
+        }
+      }
+
+      if (comparisons.length === 0) {
+        hikesList.innerHTML = `
+          <div style="font-size: 0.85rem; color: var(--text-muted); padding: 1.5rem 0.5rem; text-align: center;">
+            No hay tickets o precios registrados de <strong>${supMeta.name}</strong> todavía.<br>
+            Puedes registrar comparativas rápidas en la pestaña ⚡ Comparar.
+          </div>
+        `;
+        dropsList.innerHTML = `
+          <div style="font-size: 0.85rem; color: var(--text-muted); padding: 1.5rem 0.5rem; text-align: center;">
+            Sin datos comparativos disponibles.
+          </div>
+        `;
+        return;
+      }
+
+      // Oportunidades donde el competidor es más barato que Mercadona
+      const cheaperList = comparisons
+        .filter(c => c.isCheaper)
+        .sort((a, b) => a.diff - b.diff);
+
+      // Donde el competidor es más caro o igual
+      const expensiveList = comparisons
+        .filter(c => !c.isCheaper)
+        .sort((a, b) => b.diff - a.diff);
+
+      dropsList.innerHTML = cheaperList.length > 0 ? cheaperList.map(c => `
+        <div class="trend-item drop" style="cursor: pointer;" data-id="${c.prod.id}">
+          <div>
+            <strong style="display: block; font-size: 0.92rem;">${this.getDisplayName(c.prod)}</strong>
+            <span style="font-size: 0.76rem; color: var(--text-muted);">
+              ${supMeta.name}: <strong>${c.cPrice.toFixed(2)} €</strong> vs Mercadona: ${c.mPrice.toFixed(2)} €
+            </span>
+          </div>
+          <div style="text-align: right;">
+            <span style="font-family: var(--font-display); font-size: 1.15rem; font-weight: 800; color: var(--success);">
+              ${c.diffPct}%
+            </span>
+            <div style="font-size: 0.72rem; color: var(--success); font-weight: 600;">Ahorras ${Math.abs(c.diff).toFixed(2)} €</div>
+          </div>
+        </div>
+      `).join('') : '<div style="font-size:0.82rem; color:var(--text-muted); padding:1rem;">No hay productos más baratos registrados en esta tienda.</div>';
+
+      hikesList.innerHTML = expensiveList.length > 0 ? expensiveList.map(c => `
+        <div class="trend-item spike" style="cursor: pointer;" data-id="${c.prod.id}">
+          <div>
+            <strong style="display: block; font-size: 0.92rem;">${this.getDisplayName(c.prod)}</strong>
+            <span style="font-size: 0.76rem; color: var(--text-muted);">
+              ${supMeta.name}: <strong>${c.cPrice.toFixed(2)} €</strong> vs Mercadona: ${c.mPrice.toFixed(2)} €
+            </span>
+          </div>
+          <div style="text-align: right;">
+            <span style="font-family: var(--font-display); font-size: 1.15rem; font-weight: 800; color: var(--danger);">
+              +${c.diffPct}%
+            </span>
+            <div style="font-size: 0.72rem; color: var(--danger); font-weight: 600;">+${c.diff.toFixed(2)} €</div>
+          </div>
+        </div>
+      `).join('') : '<div style="font-size:0.82rem; color:var(--text-muted); padding:1rem;">Todos los productos registrados son más baratos que en Mercadona.</div>';
+
+      // Re-bind click
+      [hikesList, dropsList].forEach(container => {
+        container.querySelectorAll('.trend-item').forEach(item => {
+          item.addEventListener('click', () => {
+            const id = item.getAttribute('data-id');
+            const p = this.data.products.find(x => x.id === id);
+            if (p) this.openProductModal(p);
+          });
+        });
+      });
+      return;
+    }
+
     const products = [...(this.data.products || [])];
 
     // Top Subidas (mayor aumento porcentual desde su mínimo histórico)
