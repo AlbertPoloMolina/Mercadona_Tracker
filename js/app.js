@@ -174,6 +174,7 @@ class MercadonaApp {
           localSaved.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
           this.comparator.savedComparisons = localSaved;
           this.comparator.persistSavedComparisons();
+          this.renderStoreFilterChips();
         }
       }
     } catch (err) {
@@ -814,10 +815,10 @@ class MercadonaApp {
 
         <div class="card-actions">
           <button class="btn-card-compare" data-action="compare" title="Comparar precio en otro supermercado">
-            <span>⚡</span> Comparar
+            <span>⚡</span> <span>Comparar</span>
           </button>
-          <button class="btn-card-history" data-action="add-to-optimizer" title="Añadir al organizador de la compra">
-            🛒 + Lista
+          <button class="btn-card-add-list" data-action="add-to-optimizer" title="Añadir al organizador de la compra">
+            <span>🛒</span> <span>+ Lista</span>
           </button>
           <button class="btn-card-history" data-action="history" title="Ver historial de precios y gráfico">
             📈
@@ -833,11 +834,15 @@ class MercadonaApp {
           await this.addShoppingItem(canonical.id, 1);
           const btn = card.querySelector('[data-action="add-to-optimizer"]');
           if (btn) {
-            btn.innerHTML = '✓ Añadido';
+            btn.innerHTML = '<span>✓</span> <span>Añadido</span>';
+            btn.style.background = 'rgba(16, 185, 129, 0.15)';
             btn.style.color = 'var(--success)';
+            btn.style.borderColor = 'var(--success)';
             setTimeout(() => {
-              btn.innerHTML = '🛒 + Lista';
+              btn.innerHTML = '<span>🛒</span> <span>+ Lista</span>';
+              btn.style.background = '';
               btn.style.color = '';
+              btn.style.borderColor = '';
             }, 1200);
           }
         }
@@ -1480,6 +1485,8 @@ class MercadonaApp {
         this.renderBasketSidebar();
         this.renderComparatorSupermarketRanking(null);
         this.renderProductsList();
+        this.renderStoreFilterChips();
+        this.renderTrendsView();
 
         const dispName = this.getDisplayName(result.product);
 
@@ -1904,6 +1911,8 @@ class MercadonaApp {
         const id = btn.getAttribute('data-del-id');
         this.comparator.deleteComparison(id);
         this.renderBasketSidebar();
+        this.renderStoreFilterChips();
+        this.renderTrendsView();
       });
     });
   }
@@ -1914,6 +1923,15 @@ class MercadonaApp {
   renderTrendsView() {
     const hikesList = document.getElementById('trends-hikes-list');
     const dropsList = document.getElementById('trends-drops-list');
+    const hikesSection = document.getElementById('trends-hikes-section');
+    const dropsSection = document.getElementById('trends-drops-section');
+    const emptyState = document.getElementById('trends-empty-state');
+    const emptyDesc = document.getElementById('trends-empty-desc');
+    const hikesTitle = document.getElementById('trends-hikes-title');
+    const hikesDesc = document.getElementById('trends-hikes-desc');
+    const dropsTitle = document.getElementById('trends-drops-title');
+    const dropsDesc = document.getElementById('trends-drops-desc');
+
     if (!hikesList || !dropsList) return;
 
     const storeId = this.trendsStoreFilter || 'all';
@@ -1949,19 +1967,25 @@ class MercadonaApp {
       }
 
       if (comparisons.length === 0) {
-        hikesList.innerHTML = `
-          <div style="font-size: 0.85rem; color: var(--text-muted); padding: 1.5rem 0.5rem; text-align: center;">
-            No hay tickets o precios registrados de <strong>${supMeta.name}</strong> todavía.<br>
-            Puedes registrar comparativas rápidas en la pestaña ⚡ Comparar.
-          </div>
-        `;
-        dropsList.innerHTML = `
-          <div style="font-size: 0.85rem; color: var(--text-muted); padding: 1.5rem 0.5rem; text-align: center;">
-            Sin datos comparativos disponibles.
-          </div>
-        `;
+        if (emptyState) {
+          emptyState.style.display = 'flex';
+          if (emptyDesc) {
+            emptyDesc.innerHTML = `Aún no se han registrado compras ni comparativas para <strong>${supMeta.name}</strong>.<br>Registra un ticket o compara productos para activar sus estadísticas.`;
+          }
+        }
+        if (hikesSection) hikesSection.style.display = 'none';
+        if (dropsSection) dropsSection.style.display = 'none';
         return;
       }
+
+      if (emptyState) emptyState.style.display = 'none';
+      if (hikesSection) hikesSection.style.display = 'block';
+      if (dropsSection) dropsSection.style.display = 'block';
+
+      if (hikesTitle) hikesTitle.innerHTML = `<span>🔺</span> Más caros en ${supMeta.name} que en Mercadona`;
+      if (hikesDesc) hikesDesc.textContent = `Productos con mayor sobreprecio frente a Mercadona.`;
+      if (dropsTitle) dropsTitle.innerHTML = `<span>💎</span> Más baratos en ${supMeta.name} que en Mercadona`;
+      if (dropsDesc) dropsDesc.textContent = `Oportunidades de ahorro directo comprando en ${supMeta.name}.`;
 
       // Oportunidades donde el competidor es más barato que Mercadona
       const cheaperList = comparisons
@@ -1988,7 +2012,7 @@ class MercadonaApp {
             <div style="font-size: 0.72rem; color: var(--success); font-weight: 600;">Ahorras ${Math.abs(c.diff).toFixed(2)} €</div>
           </div>
         </div>
-      `).join('') : '<div style="font-size:0.82rem; color:var(--text-muted); padding:1rem;">No hay productos más baratos registrados en esta tienda.</div>';
+      `).join('') : '<div style="font-size:0.82rem; color:var(--text-muted); padding:1rem; text-align:center;">No hay productos más baratos registrados en esta tienda.</div>';
 
       hikesList.innerHTML = expensiveList.length > 0 ? expensiveList.map(c => `
         <div class="trend-item spike" style="cursor: pointer;" data-id="${c.prod.id}">
@@ -2005,7 +2029,7 @@ class MercadonaApp {
             <div style="font-size: 0.72rem; color: var(--danger); font-weight: 600;">+${c.diff.toFixed(2)} €</div>
           </div>
         </div>
-      `).join('') : '<div style="font-size:0.82rem; color:var(--text-muted); padding:1rem;">Todos los productos registrados son más baratos que en Mercadona.</div>';
+      `).join('') : '<div style="font-size:0.82rem; color:var(--text-muted); padding:1rem; text-align:center;">Todos los productos registrados son más baratos que en Mercadona.</div>';
 
       // Re-bind click
       [hikesList, dropsList].forEach(container => {
@@ -2019,6 +2043,16 @@ class MercadonaApp {
       });
       return;
     }
+
+    // Tienda 'all' o 'mercadona'
+    if (emptyState) emptyState.style.display = 'none';
+    if (hikesSection) hikesSection.style.display = 'block';
+    if (dropsSection) dropsSection.style.display = 'block';
+
+    if (hikesTitle) hikesTitle.innerHTML = `<span>🔺</span> Mayores Subidas Históricas`;
+    if (hikesDesc) hikesDesc.textContent = `Productos que más han encarecido respecto a su mínimo histórico.`;
+    if (dropsTitle) dropsTitle.innerHTML = `<span>💎</span> Mejores Oportunidades & Mínimos`;
+    if (dropsDesc) dropsDesc.textContent = `Productos actualmente en su precio mínimo o con bajada reciente.`;
 
     const products = [...(this.data.products || [])];
 
@@ -2300,29 +2334,90 @@ class MercadonaApp {
   /* ========================================================================
      SUBMENÚS DE TIENDA EN CATÁLOGO Y TENDENCIAS
      ======================================================================== */
+  normalizeSupermarketSlug(name) {
+    if (!name) return '';
+    const n = name.toLowerCase().trim();
+    if (n.includes('mercadona')) return 'mercadona';
+    if (n.includes('family')) return 'family-cash';
+    if (n.includes('lidl')) return 'lidl';
+    if (n.includes('carrefour')) return 'carrefour';
+    if (n.includes('dia')) return 'dia';
+    if (n.includes('aldi')) return 'aldi';
+    if (n.includes('alcampo')) return 'alcampo';
+    if (n.includes('consum')) return 'consum';
+    return n.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  }
+
+  getSupermarketProductCounts() {
+    const counts = new Map();
+    // 1. Mercadona siempre tiene productos registrados
+    counts.set('mercadona', (this.data?.products || []).length);
+
+    // 2. storeProducts en unifiedData
+    for (const sp of (this.unifiedData?.storeProducts || [])) {
+      if (sp.supermarket_id) {
+        counts.set(sp.supermarket_id, (counts.get(sp.supermarket_id) || 0) + 1);
+      }
+    }
+
+    // 3. Comparativas registradas en savedComparisons
+    for (const c of (this.comparator?.savedComparisons || [])) {
+      const slug = this.normalizeSupermarketSlug(c.competitorName);
+      if (slug) {
+        counts.set(slug, (counts.get(slug) || 0) + 1);
+      }
+    }
+    return counts;
+  }
+
   renderStoreFilterChips() {
     const catalogContainer = document.getElementById('catalog-store-chips');
     const trendsContainer = document.getElementById('trends-store-chips');
     const supermarkets = this.unifiedData?.supermarkets || [];
+    const counts = this.getSupermarketProductCounts();
+
+    // Si el filtro actual apunta a una tienda sin registros, resetear a 'all'
+    if (this.selectedStoreFilter !== 'all' && (counts.get(this.selectedStoreFilter) || 0) === 0) {
+      this.selectedStoreFilter = 'all';
+    }
+    if (this.trendsStoreFilter !== 'all' && (counts.get(this.trendsStoreFilter) || 0) === 0) {
+      this.trendsStoreFilter = 'all';
+    }
 
     const storeList = [
-      { id: 'all', name: 'Todas las Tiendas', icon: '🌐', color: 'var(--primary)' },
-      ...supermarkets
+      { id: 'all', name: 'Todas las Tiendas', icon: '🌐', color: 'var(--primary)', hasRecords: true, count: (this.data?.products || []).length },
+      ...supermarkets.map(s => {
+        const cnt = counts.get(s.id) || 0;
+        return {
+          ...s,
+          count: cnt,
+          hasRecords: cnt > 0
+        };
+      })
     ];
 
     if (catalogContainer) {
-      catalogContainer.innerHTML = storeList.map(s => `
-        <button 
-          class="store-chip ${this.selectedStoreFilter === s.id ? 'active' : ''}" 
-          data-store="${s.id}"
-          title="Ver productos de ${s.name}"
-        >
-          <span>${s.icon || '🏪'}</span>
-          <span>${s.name}</span>
-        </button>
-      `).join('');
+      catalogContainer.innerHTML = storeList.map(s => {
+        const isDisabled = !s.hasRecords;
+        const disabledAttr = isDisabled ? 'disabled aria-disabled="true"' : '';
+        const disabledClass = isDisabled ? 'disabled' : '';
+        const titleText = isDisabled ? `${s.name} (Sin registros aún)` : `Ver productos de ${s.name} (${s.count})`;
 
-      catalogContainer.querySelectorAll('.store-chip').forEach(chip => {
+        return `
+          <button 
+            class="store-chip ${this.selectedStoreFilter === s.id ? 'active' : ''} ${disabledClass}" 
+            data-store="${s.id}"
+            ${disabledAttr}
+            title="${titleText}"
+          >
+            <span>${s.icon || '🏪'}</span>
+            <span>${s.name}</span>
+            ${isDisabled ? '<span style="font-size:0.68rem; opacity:0.65;">(0)</span>' : ''}
+          </button>
+        `;
+      }).join('');
+
+      catalogContainer.querySelectorAll('.store-chip:not(:disabled)').forEach(chip => {
         chip.addEventListener('click', () => {
           this.selectedStoreFilter = chip.getAttribute('data-store');
           catalogContainer.querySelectorAll('.store-chip').forEach(c => c.classList.remove('active'));
@@ -2333,18 +2428,27 @@ class MercadonaApp {
     }
 
     if (trendsContainer) {
-      trendsContainer.innerHTML = storeList.map(s => `
-        <button 
-          class="store-chip ${this.trendsStoreFilter === s.id ? 'active' : ''}" 
-          data-store="${s.id}"
-          title="Ver tendencias de ${s.name}"
-        >
-          <span>${s.icon || '🏪'}</span>
-          <span>${s.name}</span>
-        </button>
-      `).join('');
+      trendsContainer.innerHTML = storeList.map(s => {
+        const isDisabled = !s.hasRecords;
+        const disabledAttr = isDisabled ? 'disabled aria-disabled="true"' : '';
+        const disabledClass = isDisabled ? 'disabled' : '';
+        const titleText = isDisabled ? `${s.name} (Sin registros aún)` : `Ver tendencias de ${s.name} (${s.count})`;
 
-      trendsContainer.querySelectorAll('.store-chip').forEach(chip => {
+        return `
+          <button 
+            class="store-chip ${this.trendsStoreFilter === s.id ? 'active' : ''} ${disabledClass}" 
+            data-store="${s.id}"
+            ${disabledAttr}
+            title="${titleText}"
+          >
+            <span>${s.icon || '🏪'}</span>
+            <span>${s.name}</span>
+            ${isDisabled ? '<span style="font-size:0.68rem; opacity:0.65;">(0)</span>' : ''}
+          </button>
+        `;
+      }).join('');
+
+      trendsContainer.querySelectorAll('.store-chip:not(:disabled)').forEach(chip => {
         chip.addEventListener('click', () => {
           this.trendsStoreFilter = chip.getAttribute('data-store');
           trendsContainer.querySelectorAll('.store-chip').forEach(c => c.classList.remove('active'));

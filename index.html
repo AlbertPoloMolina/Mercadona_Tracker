@@ -614,12 +614,23 @@
       </div>
 
       <div class="trends-view">
+        <!-- Estado vacío cuando no hay registros -->
+        <div class="trends-empty-state" id="trends-empty-state" style="display: none;">
+          <div style="font-size: 2.8rem; margin-bottom: 0.5rem;">🏪</div>
+          <h3 style="font-size: 1.15rem; color: var(--text-primary); margin-bottom: 0.35rem; font-weight: 700;">
+            No hay registros para este supermercado.
+          </h3>
+          <p style="font-size: 0.88rem; color: var(--text-muted); max-width: 440px; margin: 0 auto;" id="trends-empty-desc">
+            Aún no se han registrado compras ni comparativas para este supermercado.
+          </p>
+        </div>
+
         <!-- Subidas más pronunciadas -->
-        <div class="trend-card-section">
-          <h3 style="display: flex; align-items: center; gap: 0.5rem; color: var(--danger);">
+        <div class="trend-card-section" id="trends-hikes-section">
+          <h3 id="trends-hikes-title" style="display: flex; align-items: center; gap: 0.5rem; color: var(--danger);">
             <span>🔺</span> Mayores Subidas Históricas
           </h3>
-          <p style="font-size: 0.82rem; color: var(--text-muted); margin-top: 0.2rem;">
+          <p id="trends-hikes-desc" style="font-size: 0.82rem; color: var(--text-muted); margin-top: 0.2rem;">
             Productos que más han encarecido respecto a su mínimo histórico.
           </p>
           <div class="trend-list" id="trends-hikes-list">
@@ -628,11 +639,11 @@
         </div>
 
         <!-- Bajadas o Productos en Mínimo -->
-        <div class="trend-card-section">
-          <h3 style="display: flex; align-items: center; gap: 0.5rem; color: var(--success);">
+        <div class="trend-card-section" id="trends-drops-section">
+          <h3 id="trends-drops-title" style="display: flex; align-items: center; gap: 0.5rem; color: var(--success);">
             <span>💎</span> Mejores Oportunidades & Mínimos
           </h3>
-          <p style="font-size: 0.82rem; color: var(--text-muted); margin-top: 0.2rem;">
+          <p id="trends-drops-desc" style="font-size: 0.82rem; color: var(--text-muted); margin-top: 0.2rem;">
             Productos actualmente en su precio mínimo o con bajada reciente.
           </p>
           <div class="trend-list" id="trends-drops-list">

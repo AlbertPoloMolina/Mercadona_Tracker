@@ -834,24 +834,32 @@ textarea:focus {
 
 /* Card Actions */
 .card-actions {
-  display: flex;
-  gap: 0.5rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr 38px;
+  gap: 0.45rem;
   margin-top: auto;
+  align-items: stretch;
 }
 
 .btn-card-compare {
-  flex: 1;
-  background: rgba(0, 139, 83, 0.1);
+  background: rgba(0, 139, 83, 0.08);
   color: var(--primary);
   font-weight: 600;
-  font-size: 0.85rem;
-  padding: 0.6rem 0.75rem;
+  font-size: 0.8rem;
+  padding: 0.45rem 0.35rem;
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.35rem;
-  border: 1px solid rgba(0, 139, 83, 0.25);
+  gap: 0.3rem;
+  border: 1px solid rgba(0, 139, 83, 0.22);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  min-height: 38px;
+  height: 38px;
+  transition: all var(--transition-fast);
 }
 
 .btn-card-compare:hover {
@@ -859,8 +867,37 @@ textarea:focus {
   color: white;
 }
 
+.btn-card-add-list {
+  background: rgba(14, 165, 233, 0.08);
+  color: #0284c7;
+  font-weight: 600;
+  font-size: 0.8rem;
+  padding: 0.45rem 0.35rem;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  border: 1px solid rgba(14, 165, 233, 0.22);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  min-height: 38px;
+  height: 38px;
+  transition: all var(--transition-fast);
+}
+
+.btn-card-add-list:hover {
+  background: #0284c7;
+  color: white;
+  border-color: #0284c7;
+}
+
 .btn-card-history {
   width: 38px;
+  height: 38px;
+  min-height: 38px;
   background: var(--bg-surface-subtle);
   color: var(--text-secondary);
   border: 1px solid var(--border-color);
@@ -869,6 +906,8 @@ textarea:focus {
   align-items: center;
   justify-content: center;
   font-size: 1rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
 }
 
 .btn-card-history:hover {
@@ -1580,6 +1619,20 @@ textarea:focus {
   gap: 1.5rem;
 }
 
+.trends-empty-state {
+  grid-column: 1 / -1;
+  background: var(--bg-surface);
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 3.5rem 1.5rem;
+  text-align: center;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
 .trend-card-section {
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
@@ -2250,6 +2303,18 @@ textarea:focus {
   background: var(--carrefour);
   border-color: var(--carrefour);
   box-shadow: 0 2px 8px rgba(15, 76, 129, 0.3);
+}
+
+.store-chip:disabled,
+.store-chip.disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+  pointer-events: none;
+  background: var(--bg-surface-subtle);
+  border-color: var(--border-color);
+  color: var(--text-muted);
+  box-shadow: none !important;
+  transform: none !important;
 }
 
 .store-chip-count {
