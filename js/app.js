@@ -55,6 +55,20 @@ class MercadonaApp {
     await this.loadData();
     await this.loadUnifiedData();
     await this.loadCompetitorHistory();
+
+    // Limpieza de comparativas residuales de prueba de Carrefour si existieran en cache local
+    if (this.comparator && Array.isArray(this.comparator.savedComparisons)) {
+      const initialLen = this.comparator.savedComparisons.length;
+      this.comparator.savedComparisons = this.comparator.savedComparisons.filter(c => {
+        const isCarrefourTest = (c.competitorName && c.competitorName.toLowerCase().includes('carrefour')) || 
+                                (c.id && String(c.id).startsWith('cmp_17908800'));
+        return !isCarrefourTest;
+      });
+      if (this.comparator.savedComparisons.length !== initialLen) {
+        this.comparator.persistSavedComparisons();
+      }
+    }
+
     await this.loadShoppingList();
     this.setupEventListeners();
     this.setupOptimizerEvents();
@@ -643,7 +657,7 @@ class MercadonaApp {
           const hasInStore = offers.some(o => o.supermarket_id === this.selectedStoreFilter);
           if (hasInStore) return true;
           const hasComparison = (this.comparator.savedComparisons || []).some(c => {
-            const cSlug = (c.competitorName || '').toLowerCase().replace(/\s+/g, '-');
+            const cSlug = this.normalizeSupermarketSlug(c.competitorName);
             return cSlug === this.selectedStoreFilter && c.productName === p.name;
           });
           return hasComparison;
@@ -654,10 +668,12 @@ class MercadonaApp {
     // 4. Ordenación
     const sort = this.filters.sort;
     list.sort((a, b) => {
-      if (sort === 'frequent-desc') return b.totalPurchases - a.totalPurchases;
-      if (sort === 'recent-desc') return (b.lastDateISO || '').localeCompare(a.lastDateISO || '');
-      if (sort === 'price-asc') return a.lastPrice - b.lastPrice;
-      if (sort === 'price-desc') return b.lastPrice - a.lastPrice;
+      const aDet = this.getProductSupermarketDetails(a, this.selectedStoreFilter);
+      const bDet = this.getProductSupermarketDetails(b, this.selectedStoreFilter);
+      if (sort === 'frequent-desc') return bDet.purchases - aDet.purchases;
+      if (sort === 'recent-desc') return (bDet.date || '').localeCompare(aDet.date || '');
+      if (sort === 'price-asc') return aDet.price - bDet.price;
+      if (sort === 'price-desc') return bDet.price - aDet.price;
       if (sort === 'diff-desc') return (b.changeMinPct || 0) - (a.changeMinPct || 0);
       if (sort === 'name-asc') return this.getDisplayName(a).localeCompare(this.getDisplayName(b), 'es');
       return 0;
@@ -767,41 +783,101 @@ class MercadonaApp {
         `;
       }
 
+      const storeFilter = this.selectedStoreFilter || 'all';
+      const storeDetails = this.getProductSupermarketDetails(prod, storeFilter);
+
+      let purchasesBadgeText = '';
+      if (storeDetails.isSpecificCompetitor) {
+        purchasesBadgeText = `🛒 ${storeDetails.purchases} ${storeDetails.purchases === 1 ? 'ticket' : 'tickets'} en ${storeDetails.storeName}`;
+      } else if (storeFilter === 'mercadona') {
+        purchasesBadgeText = `🛒 ${prod.totalPurchases} ${prod.totalPurchases === 1 ? 'ticket' : 'tickets'} en Mercadona`;
+      } else {
+        purchasesBadgeText = (offers && offers.length > 1)
+          ? `🛒 ${this.getSupermarketBreakdownBadge(prod)}`
+          : `🛒 ${prod.totalPurchases} ${prod.totalPurchases === 1 ? 'ticket' : 'tickets'}`;
+      }
+
+      const displayTicketName = storeDetails.isSpecificCompetitor
+        ? `<span class="card-ticket-name" title="Nombre en el ticket de ${storeDetails.storeName}">🧾 ${storeDetails.ticketName}</span>`
+        : (isCustom ? `<span class="card-ticket-name" title="Nombre en el ticket de compra">🧾 ${prod.name}</span>` : '');
+
+      const priceHeroHtml = storeDetails.isSpecificCompetitor ? `
+        <div class="card-price-hero">
+          <div class="price-main-box">
+            <span class="price-main-label">Último Precio en ${storeDetails.storeName} (${storeDetails.date})</span>
+            <div style="display: flex; align-items: baseline; gap: 0.45rem; flex-wrap: wrap;">
+              <span class="price-main-value">${storeDetails.price.toFixed(2)} €</span>
+              ${unitPriceBadgeHtml}
+            </div>
+          </div>
+          <div class="card-trend-box" style="text-align: right;">
+            <span style="font-size: 0.72rem; color: var(--text-muted); display: block;">vs Mercadona</span>
+            <span style="font-weight: 800; font-size: 1.05rem; color: ${storeDetails.diff <= 0 ? 'var(--success)' : 'var(--danger)'};">
+              ${storeDetails.diff <= 0 ? storeDetails.diff.toFixed(2) : '+' + storeDetails.diff.toFixed(2)} €
+            </span>
+          </div>
+        </div>
+      ` : `
+        <div class="card-price-hero">
+          <div class="price-main-box">
+            <span class="price-main-label">Último Precio (${prod.lastDate})</span>
+            <div style="display: flex; align-items: baseline; gap: 0.45rem; flex-wrap: wrap;">
+              <span class="price-main-value">${prod.lastPrice.toFixed(2)} €</span>
+              ${unitPriceBadgeHtml}
+            </div>
+          </div>
+          ${trendHtml}
+        </div>
+      `;
+
+      const statsTripleHtml = storeDetails.isSpecificCompetitor ? `
+        <div class="card-stats-triple">
+          <div class="stat-mini-item">
+            <span class="stat-mini-label">En Mercadona</span>
+            <span class="stat-mini-val">${prod.lastPrice.toFixed(2)} €</span>
+          </div>
+          <div class="stat-mini-item">
+            <span class="stat-mini-label">Diferencia</span>
+            <span class="stat-mini-val ${storeDetails.diff <= 0 ? 'min-val' : 'max-val'}">
+              ${storeDetails.diff <= 0 ? storeDetails.diff.toFixed(2) : '+' + storeDetails.diff.toFixed(2)} €
+            </span>
+          </div>
+          <div class="stat-mini-item">
+            <span class="stat-mini-label">Ahorro %</span>
+            <span class="stat-mini-val ${storeDetails.diff <= 0 ? 'min-val' : 'max-val'}">
+              ${storeDetails.diffPct <= 0 ? storeDetails.diffPct + '%' : '+' + storeDetails.diffPct + '%'}
+            </span>
+          </div>
+        </div>
+      ` : `
+        <div class="card-stats-triple">
+          <div class="stat-mini-item">
+            <span class="stat-mini-label">Mínimo</span>
+            <span class="stat-mini-val min-val">${prod.minPrice.toFixed(2)} €</span>
+          </div>
+          <div class="stat-mini-item">
+            <span class="stat-mini-label">Media</span>
+            <span class="stat-mini-val">${prod.avgPrice.toFixed(2)} €</span>
+          </div>
+          <div class="stat-mini-item">
+            <span class="stat-mini-label">Máximo</span>
+            <span class="stat-mini-val max-val">${prod.maxPrice.toFixed(2)} €</span>
+          </div>
+        </div>
+      `;
+
       card.innerHTML = `
         <div>
           <div class="card-header">
             <span class="card-category-badge" title="${prod.category}">${prod.category}</span>
-            <span class="card-purchases-badge" title="Veces comprado">🛒 ${prod.totalPurchases} ${prod.totalPurchases === 1 ? 'ticket' : 'tickets'}</span>
+            <span class="card-purchases-badge" title="Veces comprado">${purchasesBadgeText}</span>
           </div>
 
           <h3 class="card-title" title="${displayName}">${displayName}</h3>
-          ${isCustom ? `<span class="card-ticket-name" title="Nombre en el ticket de compra">🧾 ${prod.name}</span>` : ''}
+          ${displayTicketName}
 
-          <div class="card-price-hero">
-            <div class="price-main-box">
-              <span class="price-main-label">Último Precio (${prod.lastDate})</span>
-              <div style="display: flex; align-items: baseline; gap: 0.45rem; flex-wrap: wrap;">
-                <span class="price-main-value">${prod.lastPrice.toFixed(2)} €</span>
-                ${unitPriceBadgeHtml}
-              </div>
-            </div>
-            ${trendHtml}
-          </div>
-
-          <div class="card-stats-triple">
-            <div class="stat-mini-item">
-              <span class="stat-mini-label">Mínimo</span>
-              <span class="stat-mini-val min-val">${prod.minPrice.toFixed(2)} €</span>
-            </div>
-            <div class="stat-mini-item">
-              <span class="stat-mini-label">Media</span>
-              <span class="stat-mini-val">${prod.avgPrice.toFixed(2)} €</span>
-            </div>
-            <div class="stat-mini-item">
-              <span class="stat-mini-label">Máximo</span>
-              <span class="stat-mini-val max-val">${prod.maxPrice.toFixed(2)} €</span>
-            </div>
-          </div>
+          ${priceHeroHtml}
+          ${statsTripleHtml}
 
           <div class="card-range-indicator" title="Posición del último precio en el rango histórico">
             <div class="range-bar-track">
@@ -894,21 +970,28 @@ class MercadonaApp {
       const format = this.getProductFormat(prod);
       const unitInfo = calculateProductUnitPrice(prod.lastPrice, format);
 
+      const storeFilter = this.selectedStoreFilter || 'all';
+      const storeDetails = this.getProductSupermarketDetails(prod, storeFilter);
+
+      const tableTicketSub = storeDetails.isSpecificCompetitor
+        ? `<div class="table-ticket-sub">🧾 ${storeDetails.ticketName}</div>`
+        : (isCustom ? `<div class="table-ticket-sub">🧾 ${prod.name}</div>` : '');
+
       tr.innerHTML = `
         <td>
           <strong style="color: var(--text-primary); font-size: 0.95rem;">${displayName}</strong>
-          ${isCustom ? `<div class="table-ticket-sub">🧾 ${prod.name}</div>` : ''}
+          ${tableTicketSub}
         </td>
         <td><span class="card-category-badge">${prod.category}</span></td>
         <td>
-          <div style="font-weight: 800; color: var(--primary); font-size: 1rem;">${prod.lastPrice.toFixed(2)} €</div>
+          <div style="font-weight: 800; color: var(--primary); font-size: 1rem;">${storeDetails.price.toFixed(2)} €</div>
           ${unitInfo ? `<span class="table-unit-price-tag">🏷️ ${unitInfo.formatted}</span>` : ''}
         </td>
         <td style="color: var(--success); font-weight: 600;">${prod.minPrice.toFixed(2)} €</td>
         <td style="color: var(--danger); font-weight: 600;">${prod.maxPrice.toFixed(2)} €</td>
         <td>${prod.avgPrice.toFixed(2)} €</td>
-        <td>${prod.totalPurchases}</td>
-        <td>${prod.lastDate}</td>
+        <td>${storeDetails.purchases}</td>
+        <td>${storeDetails.date}</td>
         <td>
           <button class="btn-card-compare" style="padding: 0.35rem 0.65rem;" data-action="compare-table">
             ⚡ Comparar
@@ -2329,6 +2412,85 @@ class MercadonaApp {
     const canonical = this.getCanonicalForProduct(product);
     if (!canonical) return [];
     return this.optimizer.getStoreOffersForCanonical(canonical.id);
+  }
+
+  getProductSupermarketDetails(product, storeId) {
+    if (!storeId || storeId === 'all' || storeId === 'mercadona') {
+      return {
+        storeId: 'mercadona',
+        storeName: 'Mercadona',
+        price: product.lastPrice,
+        date: product.lastDate,
+        ticketName: product.name,
+        purchases: product.totalPurchases || 0,
+        isSpecificCompetitor: false
+      };
+    }
+
+    const supMeta = (this.unifiedData?.supermarkets || []).find(s => s.id === storeId) || {
+      name: storeId,
+      color: '#666',
+      icon: '🏪'
+    };
+
+    const offers = this.getOffersForProduct(product);
+    const storeOffer = offers.find(o => o.supermarket_id === storeId);
+
+    // Contar comparativas guardadas para esta tienda y producto
+    const manualCount = (this.comparator?.savedComparisons || []).filter(c => {
+      const slug = this.normalizeSupermarketSlug(c.competitorName);
+      return slug === storeId && c.productName === product.name;
+    }).length;
+
+    const ticketPurchases = storeOffer ? (storeOffer.total_purchases || 1) : 0;
+    const totalPurchases = ticketPurchases + manualCount;
+
+    let price = product.lastPrice;
+    let date = 'Reciente';
+    let ticketName = product.name;
+
+    if (storeOffer) {
+      price = storeOffer.last_price;
+      date = storeOffer.last_date || 'Reciente';
+      ticketName = storeOffer.ticket_name || product.name;
+    } else if (manualCount > 0) {
+      const cmp = (this.comparator.savedComparisons || []).find(c => {
+        return this.normalizeSupermarketSlug(c.competitorName) === storeId && c.productName === product.name;
+      });
+      if (cmp) {
+        price = cmp.actualCompetitorCost || cmp.competitorPrice || product.lastPrice;
+        date = cmp.timestamp ? new Date(cmp.timestamp).toLocaleDateString('es-ES') : 'Reciente';
+      }
+    }
+
+    const diff = Math.round((price - product.lastPrice) * 100) / 100;
+    const diffPct = product.lastPrice > 0 ? Math.round(((price - product.lastPrice) / product.lastPrice) * 1000) / 10 : 0;
+
+    return {
+      storeId,
+      storeName: supMeta.name,
+      price,
+      date,
+      ticketName,
+      purchases: totalPurchases,
+      diff,
+      diffPct,
+      isSpecificCompetitor: true
+    };
+  }
+
+  getSupermarketBreakdownBadge(product) {
+    const parts = [`Mercadona: ${product.totalPurchases || 0}`];
+    const offers = this.getOffersForProduct(product);
+    for (const o of offers) {
+      if (o.supermarket_id && o.supermarket_id !== 'mercadona') {
+        const supMeta = (this.unifiedData?.supermarkets || []).find(s => s.id === o.supermarket_id);
+        const name = supMeta?.name || o.supermarket_id;
+        const count = o.total_purchases || 1;
+        parts.push(`${name}: ${count}`);
+      }
+    }
+    return parts.join(' · ');
   }
 
   /* ========================================================================
