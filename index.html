@@ -55,6 +55,34 @@
         <button class="btn-icon" id="settings-open-btn" title="Configuración y origen de datos" aria-label="Configuración">
           ⚙️
         </button>
+
+        <!-- Botón de Usuario / Autenticación -->
+        <div class="user-menu-wrapper" id="user-menu-wrapper">
+          <button class="btn-user-auth" id="btn-user-auth" title="Iniciar sesión o gestionar cuenta">
+            <span class="user-avatar-badge" id="user-avatar-badge">👤</span>
+            <span class="user-btn-text" id="user-btn-text">Entrar</span>
+          </button>
+          
+          <!-- Dropdown cuando está logueado -->
+          <div class="user-dropdown-menu" id="user-dropdown-menu" style="display: none;">
+            <div class="user-dropdown-header">
+              <strong id="dropdown-user-name">Mi Cuenta</strong>
+              <span id="dropdown-user-email" class="dropdown-email">usuario@correo.com</span>
+              <span id="dropdown-admin-badge" class="badge-admin-tag" style="display: none;">👑 Administrador</span>
+            </div>
+            <div class="dropdown-divider"></div>
+            <button class="dropdown-item" id="dropdown-admin-panel-btn" style="display: none;">
+              <span>🛠️</span> Panel de Administración
+            </button>
+            <button class="dropdown-item" id="dropdown-my-list-btn">
+              <span>🛒</span> Mi Carro de Compra
+            </button>
+            <div class="dropdown-divider"></div>
+            <button class="dropdown-item text-danger" id="dropdown-logout-btn">
+              <span>🚪</span> Cerrar Sesión
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </header>
@@ -928,6 +956,131 @@
           </button>
         </div>
 
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE AUTENTICACIÓN -->
+  <div class="modal-backdrop" id="auth-modal" aria-hidden="true">
+    <div class="modal-window auth-modal-window" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <span class="card-category-badge" id="auth-modal-badge">👤 Cuenta Personal</span>
+          <h3 id="auth-modal-title" style="margin-top: 0.35rem;">Tu Carro de la Compra Privado</h3>
+          <p id="auth-modal-context" style="font-size: 0.82rem; color: var(--text-muted); margin-top: 0.2rem;">
+            Inicia sesión o regístrate para tener tu propio organizador de compra y ver tu ahorro optimizado.
+          </p>
+        </div>
+        <button class="modal-close-btn" id="auth-modal-close" aria-label="Cerrar modal">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Pestañas Auth: Iniciar Sesión vs Registro vs Magic Link -->
+        <div class="auth-tabs">
+          <button class="auth-tab-btn active" id="auth-tab-login" data-tab="login">Iniciar Sesión</button>
+          <button class="auth-tab-btn" id="auth-tab-signup" data-tab="signup">Crear Cuenta</button>
+          <button class="auth-tab-btn" id="auth-tab-magic" data-tab="magic">Enlace Mágico ⚡</button>
+        </div>
+
+        <!-- Formulario Contraseña (Login / Signup) -->
+        <form class="auth-form" id="auth-form-password">
+          <div class="auth-field" id="auth-name-group" style="display: none;">
+            <label class="control-label" for="auth-name-input">Nombre o Alias:</label>
+            <input type="text" id="auth-name-input" class="search-input" placeholder="Tu nombre">
+          </div>
+
+          <div class="auth-field">
+            <label class="control-label" for="auth-email-input">Correo Electrónico:</label>
+            <input type="email" id="auth-email-input" class="search-input" placeholder="ejemplo@correo.com" required autocomplete="email">
+          </div>
+
+          <div class="auth-field" id="auth-password-group">
+            <label class="control-label" for="auth-password-input">Contraseña:</label>
+            <input type="password" id="auth-password-input" class="search-input" placeholder="••••••••" required autocomplete="current-password">
+          </div>
+
+          <div id="auth-error-msg" class="auth-alert error" style="display: none;"></div>
+          <div id="auth-success-msg" class="auth-alert success" style="display: none;"></div>
+
+          <button type="submit" class="btn-card-compare auth-submit-btn" id="auth-submit-btn" style="width: 100%; padding: 0.75rem; font-size: 0.95rem; margin-top: 0.5rem;">
+            <span>Entrar a mi cuenta</span>
+          </button>
+        </form>
+
+        <!-- Formulario Magic Link (Enlace al correo sin contraseña) -->
+        <form class="auth-form" id="auth-form-magic" style="display: none;">
+          <div class="auth-field">
+            <label class="control-label" for="auth-magic-email-input">Tu Correo Electrónico:</label>
+            <input type="email" id="auth-magic-email-input" class="search-input" placeholder="ejemplo@correo.com" required>
+            <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.35rem;">
+              Te enviaremos un enlace seguro a tu bandeja de entrada para entrar con 1 solo clic, sin recordar contraseñas.
+            </p>
+          </div>
+
+          <div id="auth-magic-error" class="auth-alert error" style="display: none;"></div>
+          <div id="auth-magic-success" class="auth-alert success" style="display: none;"></div>
+
+          <button type="submit" class="btn-card-compare auth-submit-btn" id="auth-magic-submit-btn" style="width: 100%; padding: 0.75rem; font-size: 0.95rem; margin-top: 0.5rem;">
+            <span>⚡ Enviar Enlace de Acceso</span>
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE PANEL DE ADMINISTRACIÓN DE CATÁLOGO (SOLO ADMIN) -->
+  <div class="modal-backdrop" id="admin-panel-modal" aria-hidden="true">
+    <div class="modal-window admin-modal-window" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <span class="card-category-badge" style="background: var(--primary); color: white;">👑 Panel de Administrador</span>
+            <span class="badge-admin-tag" id="admin-user-tag">Admin</span>
+          </div>
+          <h3 style="margin-top: 0.35rem;">Gestión de Catálogo, Categorías y Equivalencias</h3>
+          <p style="font-size: 0.82rem; color: var(--text-muted); margin-top: 0.2rem;">
+            Edita descripciones, reasigna categorías y vincula productos de otras tiendas con Mercadona.
+          </p>
+        </div>
+        <button class="modal-close-btn" id="admin-panel-close" aria-label="Cerrar modal">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Pestañas internas de administración -->
+        <div class="auth-tabs" style="margin-bottom: 1.25rem;">
+          <button class="auth-tab-btn active" id="admin-tab-products" data-tab="products">
+            📝 Catálogo & Categorías
+          </button>
+          <button class="auth-tab-btn" id="admin-tab-matching" data-tab="matching">
+            🔗 Vinculación Multi-Tienda (Equivalencias)
+          </button>
+        </div>
+
+        <!-- Pestaña 1: Catálogo y Categorías -->
+        <div class="admin-tab-content" id="admin-content-products">
+          <div class="admin-search-bar" style="margin-bottom: 1rem;">
+            <input type="text" id="admin-product-search" class="search-input" placeholder="🔍 Buscar producto para editar descripción o categoría..." style="width: 100%;">
+          </div>
+
+          <div id="admin-products-list" class="admin-items-container">
+            <!-- Inyectado dinámicamente -->
+          </div>
+        </div>
+
+        <!-- Pestaña 2: Vinculación Multi-Tienda -->
+        <div class="admin-tab-content" id="admin-content-matching" style="display: none;">
+          <div style="background: var(--bg-surface-subtle); padding: 0.85rem; border-radius: var(--radius-md); margin-bottom: 1rem; border: 1px solid var(--border-color); font-size: 0.84rem; color: var(--text-secondary); line-height: 1.5;">
+            <strong>🔗 Corrección de Conexiones:</strong> Aquí puedes revisar los productos de <strong>Family Cash, Carrefour, Lidl, etc.</strong> y enlazarlos al producto correcto de <strong>Mercadona</strong> si el emparejamiento automático no fue el adecuado.
+          </div>
+
+          <div class="admin-search-bar" style="margin-bottom: 1rem;">
+            <input type="text" id="admin-matching-search" class="search-input" placeholder="🔍 Filtrar productos de la competencia..." style="width: 100%;">
+          </div>
+
+          <div id="admin-matching-list" class="admin-items-container">
+            <!-- Inyectado dinámicamente -->
+          </div>
+        </div>
       </div>
     </div>
   </div>

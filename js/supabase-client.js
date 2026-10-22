@@ -11,6 +11,11 @@ export const DEFAULT_SUPABASE_CONFIG = {
 export class SupabaseClient {
   constructor() {
     this.config = this.loadConfig();
+    this.authToken = null;
+  }
+
+  setAuthToken(token) {
+    this.authToken = token || null;
   }
 
   loadConfig() {
@@ -38,9 +43,10 @@ export class SupabaseClient {
   }
 
   getHeaders(extra = {}) {
+    const authBearer = this.authToken || this.config.anonKey;
     return {
       'apikey': this.config.anonKey,
-      'Authorization': `Bearer ${this.config.anonKey}`,
+      'Authorization': `Bearer ${authBearer}`,
       'Content-Type': 'application/json',
       ...extra
     };
@@ -90,35 +96,50 @@ export class SupabaseClient {
   }
 
   // =========================================================================
-  // ORGANIZADOR DE LA COMPRA (SHOPPING LIST)
+  // ORGANIZADOR DE LA COMPRA MULTIUSUARIO (SHOPPING LIST)
   // =========================================================================
-  async getShoppingList() {
+  async getShoppingList(userId = null) {
+    const cacheKey = userId ? `mercadona_shopping_list_${userId}` : 'mercadona_shopping_list_cache';
     try {
-      const url = `${this.config.url}/rest/v1/shopping_list_items?select=*&order=created_at.desc`;
+      let url = `${this.config.url}/rest/v1/shopping_list_items?select=*&order=created_at.desc`;
+      if (userId) {
+        url = `${this.config.url}/rest/v1/shopping_list_items?user_id=eq.${userId}&order=created_at.desc`;
+      }
       const resp = await fetch(url, { headers: this.getHeaders() });
       if (resp.ok) {
         const list = await resp.json();
-        localStorage.setItem('mercadona_shopping_list_cache', JSON.stringify(list));
+        localStorage.setItem(cacheKey, JSON.stringify(list));
         return list;
+      } else if (resp.status === 400 && userId) {
+        // Fallback si la columna user_id aun no existe en Supabase antes de correr el SQL
+        const fallbackUrl = `${this.config.url}/rest/v1/shopping_list_items?select=*&order=created_at.desc`;
+        const fResp = await fetch(fallbackUrl, { headers: this.getHeaders() });
+        if (fResp.ok) {
+          const list = await fResp.json();
+          return list;
+        }
       }
     } catch (e) {
       console.warn('Fallo leyendo lista de Supabase, usando caché local:', e);
     }
     try {
-      const cached = localStorage.getItem('mercadona_shopping_list_cache');
+      const cached = localStorage.getItem(cacheKey);
       return cached ? JSON.parse(cached) : [];
     } catch {
       return [];
     }
   }
 
-  async addShoppingListItem(canonicalProductId, targetQty = 1, notes = '') {
+  async addShoppingListItem(canonicalProductId, targetQty = 1, notes = '', userId = null) {
     const payload = {
       canonical_product_id: canonicalProductId,
       target_quantity: parseFloat(targetQty) || 1,
       checked: false,
       notes: notes || null
     };
+    if (userId) {
+      payload.user_id = userId;
+    }
 
     try {
       const url = `${this.config.url}/rest/v1/shopping_list_items`;
@@ -173,9 +194,12 @@ export class SupabaseClient {
     }
   }
 
-  async clearShoppingList() {
+  async clearShoppingList(userId = null) {
     try {
-      const url = `${this.config.url}/rest/v1/shopping_list_items?id=neq.00000000-0000-0000-0000-000000000000`;
+      let url = `${this.config.url}/rest/v1/shopping_list_items?id=neq.00000000-0000-0000-0000-000000000000`;
+      if (userId) {
+        url = `${this.config.url}/rest/v1/shopping_list_items?user_id=eq.${userId}`;
+      }
       const resp = await fetch(url, {
         method: 'DELETE',
         headers: this.getHeaders()
@@ -188,23 +212,45 @@ export class SupabaseClient {
   }
 
   // =========================================================================
-  // REASIGNACIÓN DE EQUIVALENCIA CANÓNICA
+  // GESTIÓN Y ADMINISTRACIÓN DEL CATÁLOGO (SOLO ADMIN)
   // =========================================================================
-  async reassignStoreProductCanonical(storeProductId, newCanonicalId) {
+  async updateCanonicalProduct(canonicalId, updates = {}) {
     try {
-      const url = `${this.config.url}/rest/v1/store_products?id=eq.${storeProductId}`;
+      const url = `${this.config.url}/rest/v1/canonical_products?id=eq.${canonicalId}`;
       const resp = await fetch(url, {
         method: 'PATCH',
-        headers: this.getHeaders(),
+        headers: this.getHeaders({ 'Prefer': 'return=representation' }),
         body: JSON.stringify({
-          canonical_product_id: newCanonicalId,
+          ...updates,
           updated_at: new Date().toISOString()
         })
       });
       return resp.ok;
     } catch (e) {
-      console.warn('Error reasignando canónico en Supabase:', e);
+      console.warn('Error actualizando canonical en Supabase:', e);
       return false;
     }
+  }
+
+  async updateStoreProduct(storeProductId, updates = {}) {
+    try {
+      const url = `${this.config.url}/rest/v1/store_products?id=eq.${storeProductId}`;
+      const resp = await fetch(url, {
+        method: 'PATCH',
+        headers: this.getHeaders({ 'Prefer': 'return=representation' }),
+        body: JSON.stringify({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
+      });
+      return resp.ok;
+    } catch (e) {
+      console.warn('Error actualizando store_product en Supabase:', e);
+      return false;
+    }
+  }
+
+  async reassignStoreProductCanonical(storeProductId, newCanonicalId) {
+    return this.updateStoreProduct(storeProductId, { canonical_product_id: newCanonicalId });
   }
 }

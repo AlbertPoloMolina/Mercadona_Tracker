@@ -8,6 +8,7 @@ import { renderPriceChart, destroyActiveChart } from './chart-manager.js';
 import { GitHubSyncManager } from './github-sync.js';
 import { SupabaseClient } from './supabase-client.js';
 import { ShoppingOptimizer } from './optimizer.js';
+import { AuthManager } from './auth.js';
 
 class MercadonaApp {
   constructor() {
@@ -29,6 +30,13 @@ class MercadonaApp {
     this.githubSync = new GitHubSyncManager();
     this.supabase = new SupabaseClient();
     this.optimizer = new ShoppingOptimizer();
+    this.auth = new AuthManager(this.supabase.config);
+    this.currentAuthTab = 'login';
+
+    // Sincronizar token de sesión existente con Supabase Client
+    if (this.auth.getAccessToken()) {
+      this.supabase.setAuthToken(this.auth.getAccessToken());
+    }
 
     this.unifiedData = {
       supermarkets: [],
@@ -72,6 +80,9 @@ class MercadonaApp {
     await this.loadShoppingList();
     this.setupEventListeners();
     this.setupOptimizerEvents();
+    this.setupAuth();
+    this.setupAuthModalEvents();
+    this.setupAdminPanelEvents();
     this.renderAll();
   }
 
@@ -2386,7 +2397,12 @@ class MercadonaApp {
 
   async loadShoppingList() {
     try {
-      this.shoppingList = await this.supabase.getShoppingList();
+      if (!this.auth?.isAuthenticated()) {
+        this.shoppingList = [];
+        return;
+      }
+      const userId = this.auth.getUserId();
+      this.shoppingList = await this.supabase.getShoppingList(userId);
     } catch (e) {
       console.warn('Error cargando lista de la compra:', e);
       this.shoppingList = [];
@@ -2775,7 +2791,7 @@ class MercadonaApp {
       if (confirm('¿Vaciar toda la lista de la compra?')) {
         this.shoppingList = [];
         this.renderOptimizerView();
-        await this.supabase.clearShoppingList();
+        await this.supabase.clearShoppingList(this.auth?.getUserId());
       }
     });
 
@@ -2823,15 +2839,20 @@ class MercadonaApp {
 
   async addShoppingItem(canonicalId, qty = 1) {
     if (!canonicalId) return;
+    if (!this.auth?.isAuthenticated()) {
+      this.openAuthModal('Inicia sesión o crea tu cuenta gratuita para añadir productos a tu lista de compra privada.');
+      return;
+    }
+    const userId = this.auth.getUserId();
     const existing = this.shoppingList.find(i => i.canonical_product_id === canonicalId);
     if (existing) {
       existing.target_quantity = (parseFloat(existing.target_quantity) || 1) + qty;
       this.renderOptimizerView();
-      await this.supabase.addShoppingListItem(canonicalId, existing.target_quantity);
+      await this.supabase.addShoppingListItem(canonicalId, existing.target_quantity, '', userId);
       return;
     }
 
-    const newItem = await this.supabase.addShoppingListItem(canonicalId, qty);
+    const newItem = await this.supabase.addShoppingListItem(canonicalId, qty, '', userId);
     this.shoppingList.unshift(newItem);
     this.renderOptimizerView();
   }
@@ -2845,6 +2866,30 @@ class MercadonaApp {
     const singleStoresCard = document.getElementById('single-stores-card');
 
     if (!listContainer) return;
+
+    if (!this.auth?.isAuthenticated()) {
+      if (countBadge) countBadge.textContent = '0';
+      if (checkedCountEl) checkedCountEl.textContent = 'Requiere inicio de sesión';
+      if (emptyState) emptyState.style.display = 'none';
+      if (heroCard) heroCard.style.display = 'none';
+      if (singleStoresCard) singleStoresCard.style.display = 'none';
+      listContainer.innerHTML = `
+        <div style="text-align: center; padding: 2.8rem 1.5rem; background: var(--bg-surface); border: 1px dashed var(--border-color); border-radius: var(--radius-lg); margin-top: 1rem;">
+          <div style="font-size: 2.8rem; margin-bottom: 0.75rem;">🛒🔒</div>
+          <h4 style="font-size: 1.2rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--text-primary);">Tu Carro de la Compra Privado</h4>
+          <p style="font-size: 0.9rem; color: var(--text-secondary); max-width: 480px; margin: 0 auto 1.5rem auto; line-height: 1.5;">
+            Inicia sesión o regístrate gratis para añadir productos a tu lista personal, calcular el carro más económico entre supermercados y sincronizarlo entre tus dispositivos.
+          </p>
+          <button class="btn-card-compare" id="btn-login-to-cart" style="padding: 0.75rem 1.5rem; font-size: 0.95rem; margin: 0 auto; display: inline-flex;">
+            <span>👤 Iniciar Sesión / Crear Cuenta</span>
+          </button>
+        </div>
+      `;
+      listContainer.querySelector('#btn-login-to-cart')?.addEventListener('click', () => {
+        this.openAuthModal('Inicia sesión o crea tu cuenta gratuita para acceder a tu carro privado.');
+      });
+      return;
+    }
 
     const totalCount = this.shoppingList.length;
     const checkedCount = this.shoppingList.filter(i => i.checked).length;
@@ -2950,7 +2995,7 @@ class MercadonaApp {
         if (item && item.target_quantity > 1) {
           item.target_quantity -= 1;
           this.renderOptimizerView();
-          await this.supabase.addShoppingListItem(item.canonical_product_id, item.target_quantity);
+          await this.supabase.addShoppingListItem(item.canonical_product_id, item.target_quantity, '', this.auth?.getUserId());
         }
       });
     });
@@ -2962,7 +3007,7 @@ class MercadonaApp {
         if (item) {
           item.target_quantity = (parseFloat(item.target_quantity) || 1) + 1;
           this.renderOptimizerView();
-          await this.supabase.addShoppingListItem(item.canonical_product_id, item.target_quantity);
+          await this.supabase.addShoppingListItem(item.canonical_product_id, item.target_quantity, '', this.auth?.getUserId());
         }
       });
     });
@@ -2975,7 +3020,7 @@ class MercadonaApp {
         if (item) {
           item.target_quantity = val;
           this.renderOptimizerView();
-          await this.supabase.addShoppingListItem(item.canonical_product_id, val);
+          await this.supabase.addShoppingListItem(item.canonical_product_id, val, '', this.auth?.getUserId());
         }
       });
     });
@@ -3089,6 +3134,607 @@ class MercadonaApp {
         `;
       }).join('');
     }
+  }
+
+  /* ========================================================================
+     SISTEMA DE AUTENTICACIÓN MULTIUSUARIO Y SESIÓN PRIVADA
+     ======================================================================== */
+  escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  setupAuth() {
+    const userBtn = document.getElementById('btn-user-auth');
+    const dropdown = document.getElementById('user-dropdown-menu');
+
+    // Botón de usuario en la barra superior
+    userBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!this.auth.isAuthenticated()) {
+        this.openAuthModal();
+      } else {
+        const isVisible = dropdown.style.display !== 'none';
+        dropdown.style.display = isVisible ? 'none' : 'block';
+      }
+    });
+
+    // Cerrar dropdown al hacer clic fuera
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#user-menu-wrapper')) {
+        if (dropdown) dropdown.style.display = 'none';
+      }
+    });
+
+    // Cerrar sesión
+    document.getElementById('dropdown-logout-btn')?.addEventListener('click', async () => {
+      if (dropdown) dropdown.style.display = 'none';
+      await this.auth.signOut();
+    });
+
+    // Navegar a mi lista desde el dropdown
+    document.getElementById('dropdown-my-list-btn')?.addEventListener('click', () => {
+      if (dropdown) dropdown.style.display = 'none';
+      this.switchView('optimizer');
+    });
+
+    // Abrir Panel de Administración desde el dropdown
+    document.getElementById('dropdown-admin-panel-btn')?.addEventListener('click', () => {
+      if (dropdown) dropdown.style.display = 'none';
+      this.openAdminPanelModal();
+    });
+
+    // Escuchar cambios de estado de autenticación
+    this.auth.onAuthStateChange(state => {
+      this.handleAuthStateChange(state);
+    });
+  }
+
+  handleAuthStateChange(state) {
+    const token = state.session?.access_token || null;
+    this.supabase.setAuthToken(token);
+
+    const userBtnText = document.getElementById('user-btn-text');
+    const avatarBadge = document.getElementById('user-avatar-badge');
+    const dropdownName = document.getElementById('dropdown-user-name');
+    const dropdownEmail = document.getElementById('dropdown-user-email');
+    const adminBadge = document.getElementById('dropdown-admin-badge');
+    const adminPanelBtn = document.getElementById('dropdown-admin-panel-btn');
+
+    if (state.isAuthenticated && state.user) {
+      const name = this.auth.getUserDisplayName();
+      const email = this.auth.getUserEmail();
+      const isAdmin = this.auth.isAdmin();
+
+      if (userBtnText) userBtnText.textContent = name;
+      if (avatarBadge) avatarBadge.textContent = isAdmin ? '👑' : '👤';
+      if (dropdownName) dropdownName.textContent = name;
+      if (dropdownEmail) dropdownEmail.textContent = email;
+      if (adminBadge) adminBadge.style.display = isAdmin ? 'inline-block' : 'none';
+      if (adminPanelBtn) adminPanelBtn.style.display = isAdmin ? 'flex' : 'none';
+    } else {
+      if (userBtnText) userBtnText.textContent = 'Entrar';
+      if (avatarBadge) avatarBadge.textContent = '👤';
+      if (dropdownName) dropdownName.textContent = 'Mi Cuenta';
+      if (dropdownEmail) dropdownEmail.textContent = '';
+      if (adminBadge) adminBadge.style.display = 'none';
+      if (adminPanelBtn) adminPanelBtn.style.display = 'none';
+    }
+
+    // Recargar lista privada del usuario
+    this.loadShoppingList().then(() => {
+      this.renderOptimizerView();
+    });
+  }
+
+  setupAuthModalEvents() {
+    const modal = document.getElementById('auth-modal');
+    const closeBtn = document.getElementById('auth-modal-close');
+    closeBtn?.addEventListener('click', () => this.closeAuthModal());
+    modal?.addEventListener('click', (e) => {
+      if (e.target.id === 'auth-modal') this.closeAuthModal();
+    });
+
+    // Pestañas (Login / Signup / Magic Link)
+    const tabs = ['login', 'signup', 'magic'];
+    tabs.forEach(tabKey => {
+      document.getElementById(`auth-tab-${tabKey}`)?.addEventListener('click', () => {
+        this.switchAuthTab(tabKey);
+      });
+    });
+
+    // Formulario Email / Contraseña
+    const passForm = document.getElementById('auth-form-password');
+    passForm?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('auth-email-input')?.value.trim();
+      const pass = document.getElementById('auth-password-input')?.value;
+      const name = document.getElementById('auth-name-input')?.value.trim();
+      const errorEl = document.getElementById('auth-error-msg');
+      const successEl = document.getElementById('auth-success-msg');
+      const submitBtn = document.getElementById('auth-submit-btn');
+
+      if (errorEl) errorEl.style.display = 'none';
+      if (successEl) successEl.style.display = 'none';
+      if (!email || !pass) return;
+
+      const origText = submitBtn ? submitBtn.innerHTML : '';
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span>⏳ Conectando...</span>';
+      }
+
+      try {
+        if (this.currentAuthTab === 'signup') {
+          await this.auth.signUp(email, pass, name);
+          if (successEl) {
+            successEl.textContent = '¡Cuenta creada con éxito! Si tienes confirmación de correo requerida, revisa tu buzón.';
+            successEl.style.display = 'block';
+          }
+          if (this.auth.isAuthenticated()) {
+            setTimeout(() => this.closeAuthModal(), 1200);
+          }
+        } else {
+          await this.auth.signInWithPassword(email, pass);
+          if (successEl) {
+            successEl.textContent = '¡Sesión iniciada correctamente! Bienvenido/a.';
+            successEl.style.display = 'block';
+          }
+          setTimeout(() => this.closeAuthModal(), 600);
+        }
+      } catch (err) {
+        if (errorEl) {
+          errorEl.textContent = err.message || 'Error durante la autenticación.';
+          errorEl.style.display = 'block';
+        }
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = origText;
+        }
+      }
+    });
+
+    // Formulario Enlace Mágico (Magic Link OTP)
+    const magicForm = document.getElementById('auth-form-magic');
+    magicForm?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('auth-magic-email-input')?.value.trim();
+      const errorEl = document.getElementById('auth-magic-error');
+      const successEl = document.getElementById('auth-magic-success');
+      const submitBtn = document.getElementById('auth-magic-submit-btn');
+
+      if (errorEl) errorEl.style.display = 'none';
+      if (successEl) successEl.style.display = 'none';
+      if (!email) return;
+
+      const origText = submitBtn ? submitBtn.innerHTML : '';
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span>⏳ Enviando enlace...</span>';
+      }
+
+      try {
+        await this.auth.signInWithOtp(email);
+        if (successEl) {
+          successEl.textContent = `📧 ¡Enlace mágico enviado a ${email}! Abre tu correo y pulsa el botón para acceder directamente.`;
+          successEl.style.display = 'block';
+        }
+      } catch (err) {
+        if (errorEl) {
+          errorEl.textContent = err.message || 'Error enviando enlace mágico.';
+          errorEl.style.display = 'block';
+        }
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = origText;
+        }
+      }
+    });
+  }
+
+  openAuthModal(contextMsg = '') {
+    const modal = document.getElementById('auth-modal');
+    if (!modal) return;
+    const contextEl = document.getElementById('auth-modal-context');
+    if (contextEl && contextMsg) {
+      contextEl.textContent = contextMsg;
+    }
+    this.switchAuthTab('login');
+    modal.classList.add('open');
+    modal.setAttribute('aria-hidden', 'false');
+  }
+
+  closeAuthModal() {
+    const modal = document.getElementById('auth-modal');
+    if (modal) {
+      modal.classList.remove('open');
+      modal.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  switchAuthTab(tabKey) {
+    this.currentAuthTab = tabKey;
+    document.querySelectorAll('.auth-tab-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.getAttribute('data-tab') === tabKey);
+    });
+
+    const passForm = document.getElementById('auth-form-password');
+    const magicForm = document.getElementById('auth-form-magic');
+    const nameGroup = document.getElementById('auth-name-group');
+    const submitBtn = document.getElementById('auth-submit-btn');
+    const titleEl = document.getElementById('auth-modal-title');
+
+    // Limpiar mensajes
+    ['auth-error-msg', 'auth-success-msg', 'auth-magic-error', 'auth-magic-success'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+
+    if (tabKey === 'magic') {
+      if (passForm) passForm.style.display = 'none';
+      if (magicForm) magicForm.style.display = 'flex';
+      if (titleEl) titleEl.textContent = 'Acceso con Enlace Mágico';
+    } else {
+      if (passForm) passForm.style.display = 'flex';
+      if (magicForm) magicForm.style.display = 'none';
+      if (tabKey === 'signup') {
+        if (nameGroup) nameGroup.style.display = 'flex';
+        if (submitBtn) submitBtn.innerHTML = '<span>✨ Crear Cuenta Gratuita</span>';
+        if (titleEl) titleEl.textContent = 'Crear Nueva Cuenta';
+      } else {
+        if (nameGroup) nameGroup.style.display = 'none';
+        if (submitBtn) submitBtn.innerHTML = '<span>Entrar a mi cuenta</span>';
+        if (titleEl) titleEl.textContent = 'Iniciar Sesión';
+      }
+    }
+  }
+
+  /* ========================================================================
+     PANEL DE ADMINISTRACIÓN DE CATÁLOGO Y VINCULACIÓN MULTI-TIENDA (SOLO ADMIN)
+     ======================================================================== */
+  setupAdminPanelEvents() {
+    const modal = document.getElementById('admin-panel-modal');
+    const closeBtn = document.getElementById('admin-panel-close');
+    closeBtn?.addEventListener('click', () => this.closeAdminPanelModal());
+    modal?.addEventListener('click', (e) => {
+      if (e.target.id === 'admin-panel-modal') this.closeAdminPanelModal();
+    });
+
+    // Pestañas
+    document.getElementById('admin-tab-products')?.addEventListener('click', () => {
+      this.switchAdminTab('products');
+    });
+    document.getElementById('admin-tab-matching')?.addEventListener('click', () => {
+      this.switchAdminTab('matching');
+    });
+
+    // Búsqueda en catálogo
+    const pSearch = document.getElementById('admin-product-search');
+    pSearch?.addEventListener('input', (e) => {
+      this.renderAdminProductsList(e.target.value.trim());
+    });
+
+    // Búsqueda en matching
+    const mSearch = document.getElementById('admin-matching-search');
+    mSearch?.addEventListener('input', (e) => {
+      this.renderAdminMatchingList(e.target.value.trim());
+    });
+  }
+
+  openAdminPanelModal() {
+    if (!this.auth.isAdmin()) {
+      alert('🔒 Acceso restringido. Solo administradores pueden gestionar el catálogo y equivalencias.');
+      return;
+    }
+    const modal = document.getElementById('admin-panel-modal');
+    if (!modal) return;
+    const tag = document.getElementById('admin-user-tag');
+    if (tag) tag.textContent = this.auth.getUserEmail() || 'Admin';
+
+    this.switchAdminTab('products');
+    this.renderAdminProductsList();
+    this.renderAdminMatchingList();
+
+    modal.classList.add('open');
+    modal.setAttribute('aria-hidden', 'false');
+  }
+
+  closeAdminPanelModal() {
+    const modal = document.getElementById('admin-panel-modal');
+    if (modal) {
+      modal.classList.remove('open');
+      modal.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  switchAdminTab(tabKey) {
+    document.getElementById('admin-tab-products')?.classList.toggle('active', tabKey === 'products');
+    document.getElementById('admin-tab-matching')?.classList.toggle('active', tabKey === 'matching');
+
+    const contentProd = document.getElementById('admin-content-products');
+    const contentMatch = document.getElementById('admin-content-matching');
+    if (contentProd) contentProd.style.display = tabKey === 'products' ? 'block' : 'none';
+    if (contentMatch) contentMatch.style.display = tabKey === 'matching' ? 'block' : 'none';
+  }
+
+  getOfficialCategories() {
+    return [
+      '🥩 Carnicería y Pescadería',
+      '🥛 Lácteos y Huevos',
+      '🥖 Panadería y Dulces',
+      '🥗 Frutas y Verduras',
+      '🥫 Despensa y Conservas',
+      '🥤 Bebidas',
+      '🧹 Limpieza y Hogar',
+      '🧴 Higiene y Cuidado',
+      '🍫 Aperitivos y Snacks',
+      '🍕 Congelados y Platos',
+      '📦 Otros productos'
+    ];
+  }
+
+  renderAdminProductsList(query = '') {
+    const container = document.getElementById('admin-products-list');
+    if (!container) return;
+
+    let canonicals = this.unifiedData?.canonicalProducts || [];
+    if (canonicals.length === 0 && this.data.products?.length > 0) {
+      canonicals = this.data.products.map(p => ({
+        id: p.id,
+        name: p.name,
+        category_id: p.category,
+        base_unit: 'ud'
+      }));
+    }
+
+    const q = query.toLowerCase();
+    const filtered = canonicals.filter(can => {
+      if (!q) return true;
+      const cName = (can.name || '').toLowerCase();
+      const cId = (can.id || '').toLowerCase();
+      const cCat = (can.category_id || '').toLowerCase();
+      return cName.includes(q) || cId.includes(q) || cCat.includes(q);
+    });
+
+    const displayList = filtered.slice(0, 50);
+
+    if (displayList.length === 0) {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 2rem; color: var(--text-muted); font-size: 0.9rem;">
+          No se encontraron productos coincidentes con "${this.escapeHtml(query)}".
+        </div>
+      `;
+      return;
+    }
+
+    const categories = this.getOfficialCategories();
+
+    container.innerHTML = `
+      <div style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.5rem; display: flex; justify-content: space-between;">
+        <span>Mostrando <strong>${displayList.length}</strong> de <strong>${filtered.length}</strong> productos</span>
+        <span>${filtered.length > 50 ? '(Usa el buscador para filtrar)' : ''}</span>
+      </div>
+      ${displayList.map(can => {
+        const custom = this.customizations[can.id] || {};
+        const displayName = custom.displayName || can.name;
+        const currentCat = custom.category || can.category_id || '📦 Otros productos';
+
+        return `
+          <div class="admin-product-row" data-id="${can.id}">
+            <div>
+              <div style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 0.2rem; font-family: monospace;">${can.id}</div>
+              <input type="text" class="admin-edit-input admin-input-display-name" value="${this.escapeHtml(displayName)}" placeholder="Nombre descriptivo para mostrar">
+            </div>
+            <div>
+              <select class="admin-edit-select admin-select-category">
+                ${categories.map(cat => `
+                  <option value="${this.escapeHtml(cat)}" ${cat === currentCat ? 'selected' : ''}>${cat}</option>
+                `).join('')}
+              </select>
+            </div>
+            <div style="font-size: 0.78rem; color: var(--text-secondary); text-align: center;">
+              ${can.base_unit || 'ud'}
+            </div>
+            <div>
+              <button class="admin-btn-save admin-btn-save-can" data-id="${can.id}">Guardar</button>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    `;
+
+    // Event listeners para guardar cambios en cada producto
+    container.querySelectorAll('.admin-btn-save-can').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-id');
+        const row = btn.closest('.admin-product-row');
+        const nameInput = row.querySelector('.admin-input-display-name');
+        const catSelect = row.querySelector('.admin-select-category');
+        const newName = nameInput.value.trim();
+        const newCat = catSelect.value;
+
+        btn.disabled = true;
+        btn.textContent = '⏳';
+
+        try {
+          // 1. Guardar en Supabase
+          await this.supabase.updateCanonicalProduct(id, {
+            name: newName,
+            category_id: newCat
+          });
+
+          // 2. Guardar en personalizaciones locales
+          this.saveCustomization(id, {
+            displayName: newName,
+            category: newCat
+          });
+
+          // 3. Actualizar memoria en vivo
+          const can = canonicals.find(c => c.id === id);
+          if (can) {
+            can.name = newName;
+            can.category_id = newCat;
+          }
+          const prod = this.data.products.find(p => p.id === id || p.name === id);
+          if (prod) {
+            prod.category = newCat;
+          }
+
+          // 4. Actualizar visualización del catálogo
+          this.renderProductsList();
+
+          btn.textContent = '✓ Guardado';
+          btn.style.background = 'var(--success)';
+          setTimeout(() => {
+            btn.textContent = 'Guardar';
+            btn.style.background = '';
+            btn.disabled = false;
+          }, 1500);
+        } catch (err) {
+          btn.textContent = 'Error';
+          btn.style.background = 'var(--danger)';
+          setTimeout(() => {
+            btn.textContent = 'Guardar';
+            btn.style.background = '';
+            btn.disabled = false;
+          }, 1500);
+        }
+      });
+    });
+  }
+
+  renderAdminMatchingList(query = '') {
+    const container = document.getElementById('admin-matching-list');
+    if (!container) return;
+
+    const storeProducts = (this.unifiedData?.storeProducts || []).filter(sp => sp.supermarket_id !== 'mercadona');
+    const canonicals = [...(this.unifiedData?.canonicalProducts || [])].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+    if (storeProducts.length === 0) {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 2rem; color: var(--text-muted); font-size: 0.9rem;">
+          No hay productos de tiendas de la competencia (Family Cash, Carrefour, etc.) registrados todavía en la base de datos.
+        </div>
+      `;
+      return;
+    }
+
+    const q = query.toLowerCase();
+    const filtered = storeProducts.filter(sp => {
+      if (!q) return true;
+      const tName = (sp.ticket_name || '').toLowerCase();
+      const dName = (sp.display_name || '').toLowerCase();
+      const sId = (sp.supermarket_id || '').toLowerCase();
+      return tName.includes(q) || dName.includes(q) || sId.includes(q);
+    });
+
+    const displayList = filtered.slice(0, 50);
+
+    if (displayList.length === 0) {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 2rem; color: var(--text-muted); font-size: 0.9rem;">
+          No se encontraron coincidencias para "${this.escapeHtml(query)}".
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = `
+      <div style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.5rem; display: flex; justify-content: space-between;">
+        <span>Mostrando <strong>${displayList.length}</strong> de <strong>${filtered.length}</strong> productos</span>
+        <span>${filtered.length > 50 ? '(Usa el buscador para filtrar)' : ''}</span>
+      </div>
+      ${displayList.map(sp => {
+        const supMeta = (this.unifiedData?.supermarkets || []).find(s => s.id === sp.supermarket_id) || {
+          name: sp.supermarket_id,
+          color: 'var(--primary)',
+          icon: '🏪'
+        };
+
+        return `
+          <div class="admin-matching-row" data-id="${sp.id}">
+            <div>
+              <div style="display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.25rem;">
+                <span style="font-size: 0.72rem; font-weight: 700; background: ${supMeta.color}22; color: ${supMeta.color}; padding: 0.1rem 0.4rem; border-radius: 4px; border: 1px solid ${supMeta.color}44;">
+                  ${supMeta.icon} ${supMeta.name}
+                </span>
+                <span style="font-size: 0.76rem; font-weight: 700; color: var(--text-primary);">${(sp.last_price || 0).toFixed(2)} €</span>
+                <span style="font-size: 0.7rem; color: var(--text-muted);">${sp.last_date || ''}</span>
+              </div>
+              <strong style="font-size: 0.84rem; display: block; color: var(--text-primary);">${this.escapeHtml(sp.ticket_name)}</strong>
+            </div>
+
+            <div class="admin-matching-arrow">➔</div>
+
+            <div>
+              <select class="admin-edit-select admin-select-canonical">
+                <option value="">-- Sin Vincular / Desconectado --</option>
+                ${canonicals.map(c => `
+                  <option value="${c.id}" ${c.id === sp.canonical_product_id ? 'selected' : ''}>
+                    ${this.escapeHtml(c.name)} (${c.id})
+                  </option>
+                `).join('')}
+              </select>
+            </div>
+
+            <div>
+              <button class="admin-btn-save admin-btn-save-match" data-id="${sp.id}">Vincular</button>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    `;
+
+    // Event listeners para actualizar vinculación de equivalencias
+    container.querySelectorAll('.admin-btn-save-match').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-id');
+        const row = btn.closest('.admin-matching-row');
+        const select = row.querySelector('.admin-select-canonical');
+        const newCanonicalId = select.value || null;
+
+        btn.disabled = true;
+        btn.textContent = '⏳';
+
+        try {
+          // 1. Guardar en Supabase
+          await this.supabase.reassignStoreProductCanonical(id, newCanonicalId);
+
+          // 2. Actualizar memoria local
+          const sp = storeProducts.find(item => String(item.id) === String(id));
+          if (sp) {
+            sp.canonical_product_id = newCanonicalId;
+          }
+
+          // 3. Recalcular optimizer con los nuevos enlaces
+          this.optimizer.setData(this.unifiedData);
+          localStorage.setItem('mercadona_unified_cache', JSON.stringify(this.unifiedData));
+
+          btn.textContent = '✓ Vinculado';
+          btn.style.background = 'var(--success)';
+          setTimeout(() => {
+            btn.textContent = 'Vincular';
+            btn.style.background = '';
+            btn.disabled = false;
+          }, 1500);
+        } catch (err) {
+          btn.textContent = 'Error';
+          btn.style.background = 'var(--danger)';
+          setTimeout(() => {
+            btn.textContent = 'Vincular';
+            btn.style.background = '';
+            btn.disabled = false;
+          }, 1500);
+        }
+      });
+    });
   }
 }
 
