@@ -33,6 +33,9 @@
         <button class="nav-tab-btn active" data-view="catalog" id="nav-btn-catalog">
           <span>📊</span> Catálogo
         </button>
+        <button class="nav-tab-btn" data-view="optimizer" id="nav-btn-optimizer">
+          <span>🛒</span> Organizador
+        </button>
         <button class="nav-tab-btn" data-view="comparator" id="nav-btn-comparator">
           <span>⚡</span> Comparador en Tienda
         </button>
@@ -133,6 +136,14 @@
           </div>
         </div>
 
+        <!-- Selector de Supermercado (Multi-Tienda) -->
+        <div class="supermarket-filter-bar" id="catalog-supermarket-bar">
+          <span class="filter-bar-label">Tienda:</span>
+          <div class="store-filter-chips" id="catalog-store-chips">
+            <!-- Inyectado dinámicamente: [ 🌐 Todas ] [ 🟢 Mercadona ] [ 🟢 Family Cash ] [ 🟡 Lidl ] ... -->
+          </div>
+        </div>
+
         <!-- Chips de Categorías -->
         <div class="categories-chips-scroll" id="categories-scroll" aria-label="Filtrar por categoría">
           <!-- Categorías inyectadas dinámicamente -->
@@ -183,6 +194,133 @@
         <div style="font-size: 3.5rem; margin-bottom: 0.5rem;">🔍</div>
         <h3>No se encontraron productos</h3>
         <p style="color: var(--text-muted); margin-top: 0.25rem;">Prueba con otro término de búsqueda o cambia los filtros de categoría.</p>
+      </div>
+
+    </section>
+
+    <!-- VISTA: ORGANIZADOR DE LA COMPRA & CARRO OPTIMIZADO -->
+    <section id="view-optimizer" class="view-section" style="display: none;">
+      
+      <div class="optimizer-view-container">
+        
+        <!-- Cabecera del Organizador -->
+        <div class="optimizer-header-card">
+          <div class="optimizer-title-group">
+            <h2><span>🛒</span> Organizador de Compra Inteligente</h2>
+            <p>Planifica tu cesta, compara el coste total por supermercado y descubre el reparto de máxima optimización.</p>
+          </div>
+          <div class="optimizer-actions-row">
+            <button class="btn-card-history" id="btn-sync-optimizer" title="Sincronizar lista con Supabase">
+              <span>🔄</span> Sincronizar
+            </button>
+            <button class="btn-delete-item" id="btn-clear-optimizer-list" title="Vaciar toda la lista" style="font-size: 0.85rem; padding: 0.5rem 0.85rem; border: 1px solid var(--border-color);">
+              🗑️ Vaciar
+            </button>
+          </div>
+        </div>
+
+        <!-- Buscador para añadir productos a la lista -->
+        <div class="optimizer-add-bar">
+          <div class="add-input-row">
+            <div class="optimizer-search-wrapper">
+              <span class="search-icon">🔍</span>
+              <input 
+                type="text" 
+                id="optimizer-search-input" 
+                class="optimizer-search-input" 
+                placeholder="Añadir a la lista... (ej. Aceite, Huevos L, Arroz, Leche, Tomate Cherry...)"
+                autocomplete="off"
+              >
+              <div id="optimizer-search-dropdown" class="optimizer-dropdown"></div>
+            </div>
+
+            <div class="optimizer-qty-selector">
+              <button class="qty-btn" id="optimizer-qty-minus" type="button">-</button>
+              <input type="number" id="optimizer-qty-input" class="qty-val-input" value="1" min="1" step="1">
+              <button class="qty-btn" id="optimizer-qty-plus" type="button">+</button>
+            </div>
+
+            <button class="btn-add-to-list" id="btn-add-to-shopping-list" type="button">
+              <span>➕</span> Añadir
+            </button>
+          </div>
+
+          <!-- Atajos de Básicos Frecuentes -->
+          <div class="quick-basics-bar">
+            <span class="quick-basics-label">Básicos rápidos:</span>
+            <button class="quick-basic-pill" data-query="huevos">🥚 Huevos L</button>
+            <button class="quick-basic-pill" data-query="leche">🥛 Leche Entera</button>
+            <button class="quick-basic-pill" data-query="aceite virgen">🫒 Aceite Virgen Extra</button>
+            <button class="quick-basic-pill" data-query="arroz">🍚 Arroz Redondo</button>
+            <button class="quick-basic-pill" data-query="pan">🥖 Pan de Molde</button>
+            <button class="quick-basic-pill" data-query="cherry">🍅 Tomates Cherry</button>
+            <button class="quick-basic-pill" data-query="bacon">🥓 Bacon Ahumado</button>
+            <button class="quick-basic-pill" data-query="lentejas">🥫 Lentejas</button>
+          </div>
+        </div>
+
+        <!-- Layout Principal: Lista (Izq) vs Comparativas y Carro Optimizado (Der) -->
+        <div class="optimizer-main-grid">
+          
+          <!-- Columna Izquierda: Mi Lista de la Compra -->
+          <div class="shopping-list-card">
+            <div class="shopping-list-header">
+              <h3 style="font-size: 1.05rem; display: flex; align-items: center; gap: 0.45rem; margin: 0;">
+                <span>📋</span> Artículos en mi Lista (<span id="optimizer-count-badge">0</span>)
+              </h3>
+              <span id="optimizer-checked-count" style="font-size: 0.8rem; color: var(--text-muted);">0 comprados</span>
+            </div>
+
+            <!-- Listado de Artículos -->
+            <div class="shopping-items-list" id="optimizer-items-list">
+              <!-- Renderizado dinámicamente -->
+            </div>
+
+            <!-- Estado Vacío -->
+            <div id="optimizer-empty-state" style="text-align: center; padding: 3rem 1rem; color: var(--text-muted);">
+              <div style="font-size: 2.8rem; margin-bottom: 0.5rem;">🛒</div>
+              <h4 style="color: var(--text-primary); margin-bottom: 0.25rem;">Tu lista de la compra está vacía</h4>
+              <p style="font-size: 0.84rem;">Busca productos arriba o selecciona uno de los básicos rápidos para empezar a calcular el ahorro.</p>
+            </div>
+          </div>
+
+          <!-- Columna Derecha: Carro Optimizado y Totales Monotienda -->
+          <div class="optimizer-sidebar">
+            
+            <!-- Banner de Carro Optimizado Multi-Tienda -->
+            <div class="optimized-hero-card" id="optimized-hero-card" style="display: none;">
+              <div class="optimized-hero-header">
+                <span class="optimized-hero-title">
+                  <span>🏆</span> Compra Optimizada (Multi-Tienda)
+                </span>
+                <span class="card-category-badge" id="optimized-stores-badge">2 tiendas</span>
+              </div>
+
+              <div class="optimized-hero-total" id="optimized-total-amount">0.00 €</div>
+
+              <div class="optimized-savings-banner" id="optimized-savings-banner" style="display: none;">
+                <span id="optimized-savings-text">🎉 Ahorras 0.00 €</span>
+                <span id="optimized-savings-pct" style="opacity: 0.9;">-0%</span>
+              </div>
+
+              <!-- Reparto por Supermercado de la Ruta Óptima -->
+              <div class="optimized-route-breakdown" id="optimized-route-breakdown">
+                <!-- Inyectado dinámicamente: Bloques por tienda -->
+              </div>
+            </div>
+
+            <!-- Comparativa Monotienda (Total en una sola tienda) -->
+            <div class="single-stores-card" id="single-stores-card" style="display: none;">
+              <h3><span>🏪</span> Estimación Total si compras en 1 sola tienda</h3>
+              <div class="single-stores-list" id="single-stores-list">
+                <!-- Inyectado dinámicamente -->
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
       </div>
 
     </section>
@@ -460,11 +598,19 @@
 
     <!-- VISTA 3: TENDENCIAS E INFLACIÓN -->
     <section id="view-trends" class="view-section" style="display: none;">
-      <div style="margin-bottom: 1.5rem;">
+      <div style="margin-bottom: 1.25rem;">
         <h2>📈 Inflación & Análisis de Tendencias</h2>
         <p style="color: var(--text-secondary); font-size: 0.92rem;">
-          Comportamiento histórico de precios en tus compras de Mercadona (2023 - 2026).
+          Comportamiento histórico y evolución de precios por supermercado.
         </p>
+      </div>
+
+      <!-- Selector de Supermercado para Tendencias -->
+      <div class="supermarket-filter-bar" id="trends-supermarket-bar" style="margin-bottom: 1.25rem;">
+        <span class="filter-bar-label">Tienda:</span>
+        <div class="store-filter-chips" id="trends-store-chips">
+          <!-- Inyectado dinámicamente -->
+        </div>
       </div>
 
       <div class="trends-view">
@@ -682,6 +828,34 @@
           <div style="margin-top: 0.35rem;"><strong>Modo Offline:</strong> <span style="color: var(--success); font-weight: 600;">✓ Datos cacheados en el navegador</span></div>
         </div>
 
+        <!-- Base de Datos Supabase (PostgreSQL Multi-Tienda) -->
+        <div style="margin-bottom: 1.5rem; background: var(--bg-surface-subtle); padding: 1.15rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+            <h4 style="font-size: 0.95rem; margin: 0; display: flex; align-items: center; gap: 0.45rem;">
+              <span>⚡</span> Base de Datos Supabase (Multi-Tienda)
+            </h4>
+            <span id="supabase-status-badge" style="background: rgba(16, 185, 129, 0.15); color: var(--success); font-size: 0.72rem; font-weight: 700; padding: 0.2rem 0.55rem; border-radius: 999px;">
+              ONLINE ✓
+            </span>
+          </div>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem; line-height: 1.45;">
+            Conexión directa con la base de datos PostgreSQL de Supabase para sincronización multi-tienda en tiempo real y organizador de la compra.
+          </p>
+
+          <div style="background: var(--bg-card); padding: 0.75rem 0.85rem; border-radius: 8px; font-size: 0.8rem; line-height: 1.6; border: 1px solid var(--border-color);">
+            <div><strong>Proyecto:</strong> <code>blxmcvaotrabcibzsduh.supabase.co</code></div>
+            <div><strong>Tablas:</strong> <code>supermarkets, canonical_products, store_products, shopping_list_items</code></div>
+            <div><strong>Estado:</strong> <span id="supabase-status-text" style="color: var(--success); font-weight: 600;">Conectado mediante Anon Key pública</span></div>
+          </div>
+
+          <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem;">
+            <button class="btn-card-compare" id="btn-test-supabase" style="width: 100%; padding: 0.55rem; font-size: 0.8rem; justify-content: center;">
+              <span>🔌</span> Probar Conexión Supabase
+            </button>
+          </div>
+          <div id="supabase-test-feedback" style="display: none; margin-top: 0.5rem; padding: 0.4rem 0.6rem; border-radius: 6px; font-size: 0.76rem; font-weight: 600;"></div>
+        </div>
+
         <!-- GitHub Integration para Leer Excel Maestro -->
         <!-- Sincronización en la Nube Multi-dispositivo (Sin tokens) -->
         <div style="margin-bottom: 1.5rem; background: var(--bg-surface-subtle); padding: 1.15rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
@@ -752,6 +926,10 @@
     <button class="mobile-nav-btn active" data-view="catalog">
       <span class="nav-icon">📊</span>
       <span>Catálogo</span>
+    </button>
+    <button class="mobile-nav-btn" data-view="optimizer">
+      <span class="nav-icon">🛒</span>
+      <span>Organizador</span>
     </button>
     <button class="mobile-nav-btn" data-view="comparator">
       <span class="nav-icon">⚡</span>

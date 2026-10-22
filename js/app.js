@@ -1,11 +1,13 @@
 /**
- * Controlador Principal del Dashboard de Precios de Mercadona
+ * Controlador Principal del Dashboard de Precios de Mercadona Multi-Tienda
  */
 
 import { parseExcelWorkbook } from './excel-parser.js';
 import { SupermarketComparator, detectProductFormat, calculateProductUnitPrice } from './comparator.js';
 import { renderPriceChart, destroyActiveChart } from './chart-manager.js';
 import { GitHubSyncManager } from './github-sync.js';
+import { SupabaseClient } from './supabase-client.js';
+import { ShoppingOptimizer } from './optimizer.js';
 
 class MercadonaApp {
   constructor() {
@@ -25,6 +27,19 @@ class MercadonaApp {
 
     this.comparator = new SupermarketComparator([]);
     this.githubSync = new GitHubSyncManager();
+    this.supabase = new SupabaseClient();
+    this.optimizer = new ShoppingOptimizer();
+
+    this.unifiedData = {
+      supermarkets: [],
+      canonicalProducts: [],
+      storeProducts: []
+    };
+    this.shoppingList = [];
+    this.selectedStoreFilter = 'all'; // for catalog: 'all' | 'mercadona' | 'family-cash' | ...
+    this.trendsStoreFilter = 'all';   // for trends
+    this.optimizerSearchSelected = null;
+
     this.activeProduct = null;
     this.selectedCompetitor = 'Carrefour';
     this.compMode = 'direct'; // 'direct' | 'weight' | 'units'
@@ -38,8 +53,11 @@ class MercadonaApp {
     this.checkTokenInUrl();
     await this.loadCustomizations();
     await this.loadData();
+    await this.loadUnifiedData();
     await this.loadCompetitorHistory();
+    await this.loadShoppingList();
     this.setupEventListeners();
+    this.setupOptimizerEvents();
     this.renderAll();
   }
 
@@ -481,6 +499,8 @@ class MercadonaApp {
 
     if (viewName === 'trends') {
       this.renderTrendsView();
+    } else if (viewName === 'optimizer') {
+      this.renderOptimizerView();
     }
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -512,6 +532,7 @@ class MercadonaApp {
      ======================================================================== */
   renderAll() {
     this.renderStatsBanner();
+    this.renderStoreFilterChips();
     this.renderCategoriesChips();
     this.renderProductsList();
     this.renderBasketSidebar();
@@ -611,6 +632,24 @@ class MercadonaApp {
       list = list.filter(p => p.lastPrice <= p.minPrice);
     }
 
+    // 3.5. Filtro por Tienda / Supermercado seleccionado
+    if (this.selectedStoreFilter && this.selectedStoreFilter !== 'all') {
+      if (this.selectedStoreFilter === 'mercadona') {
+        // En Mercadona están todos los productos del histórico original
+      } else {
+        list = list.filter(p => {
+          const offers = this.getOffersForProduct(p);
+          const hasInStore = offers.some(o => o.supermarket_id === this.selectedStoreFilter);
+          if (hasInStore) return true;
+          const hasComparison = (this.comparator.savedComparisons || []).some(c => {
+            const cSlug = (c.competitorName || '').toLowerCase().replace(/\s+/g, '-');
+            return cSlug === this.selectedStoreFilter && c.productName === p.name;
+          });
+          return hasComparison;
+        });
+      }
+    }
+
     // 4. Ordenación
     const sort = this.filters.sort;
     list.sort((a, b) => {
@@ -704,6 +743,29 @@ class MercadonaApp {
         </span>
       ` : '';
 
+      // Comparativa Multi-Tienda (precios en otros supermercados)
+      const offers = this.getOffersForProduct(prod);
+      let storeOffersHtml = '';
+      if (offers && offers.length > 1) {
+        const sorted = [...offers].sort((a, b) => a.last_price - b.last_price);
+        const best = sorted[0];
+        const tags = sorted.map(o => {
+          const sMeta = (this.unifiedData?.supermarkets || []).find(s => s.id === o.supermarket_id);
+          const isBest = o === best;
+          return `
+            <span style="font-size: 0.72rem; padding: 0.18rem 0.45rem; border-radius: 4px; border: 1px solid ${sMeta?.color || '#888'}; background: ${isBest ? (sMeta?.color || '#008b53') : 'var(--bg-surface-elevated)'}; color: ${isBest ? '#fff' : 'var(--text-primary)'}; font-weight: ${isBest ? '700' : '500'}; display: inline-flex; align-items: center; gap: 0.25rem;">
+              ${sMeta?.icon || '🏪'} ${sMeta?.name || o.supermarket_id}: ${o.last_price.toFixed(2)}€ ${isBest ? '🏆' : ''}
+            </span>
+          `;
+        }).join('');
+        storeOffersHtml = `
+          <div style="margin-top: 0.65rem; padding-top: 0.5rem; border-top: 1px dashed var(--border-color);">
+            <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600; margin-bottom: 0.25rem;">Precios en tiendas registradas:</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">${tags}</div>
+          </div>
+        `;
+      }
+
       card.innerHTML = `
         <div>
           <div class="card-header">
@@ -747,11 +809,15 @@ class MercadonaApp {
           </div>
 
           ${variantsHtml}
+          ${storeOffersHtml}
         </div>
 
         <div class="card-actions">
           <button class="btn-card-compare" data-action="compare" title="Comparar precio en otro supermercado">
-            <span>⚡</span> Comparar en Tienda
+            <span>⚡</span> Comparar
+          </button>
+          <button class="btn-card-history" data-action="add-to-optimizer" title="Añadir al organizador de la compra">
+            🛒 + Lista
           </button>
           <button class="btn-card-history" data-action="history" title="Ver historial de precios y gráfico">
             📈
@@ -760,6 +826,23 @@ class MercadonaApp {
       `;
 
       // Event listeners en la tarjeta
+      card.querySelector('[data-action="add-to-optimizer"]')?.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const canonical = this.getCanonicalForProduct(prod);
+        if (canonical) {
+          await this.addShoppingItem(canonical.id, 1);
+          const btn = card.querySelector('[data-action="add-to-optimizer"]');
+          if (btn) {
+            btn.innerHTML = '✓ Añadido';
+            btn.style.color = 'var(--success)';
+            setTimeout(() => {
+              btn.innerHTML = '🛒 + Lista';
+              btn.style.color = '';
+            }, 1200);
+          }
+        }
+      });
+
       card.querySelector('[data-action="history"]')?.addEventListener('click', (e) => {
         e.stopPropagation();
         this.openProductModal(prod);
@@ -1095,19 +1178,128 @@ class MercadonaApp {
     if (!listEl) return;
 
     const format = this.getProductFormat(product);
-    const ranking = this.comparator.getSupermarketRanking(product, format);
+    let ranking = this.comparator.getSupermarketRanking(product, format) || [];
 
-    if (ranking.length <= 1) {
-      listEl.innerHTML = `
-        <div style="font-size: 0.84rem; color: var(--text-muted); padding: 0.5rem 0;">
-          Solo tienes registrado el precio de Mercadona (${product.lastPrice.toFixed(2)} €).
-          Cuando compares en <strong>Family Cash, Carrefour, Lidl, etc.</strong> y guardes la comparativa, aparecerá aquí el ranking completo.
-        </div>
-      `;
-      return;
+    const canonical = this.getCanonicalForProduct(product);
+    if (canonical) {
+      const offers = this.optimizer.getStoreOffersForCanonical(canonical.id);
+      for (const o of offers) {
+        const supMeta = (this.unifiedData?.supermarkets || []).find(s => s.id === o.supermarket_id);
+        const storeName = supMeta?.name || o.supermarket_id;
+        const exists = ranking.some(r => r.supermarket.toLowerCase() === storeName.toLowerCase());
+        if (!exists) {
+          const unitPrice = o.last_unit_price || o.last_price;
+          const uLabel = canonical.base_unit || 'ud';
+          ranking.push({
+            supermarket: storeName,
+            price: o.last_price,
+            unitPrice: unitPrice,
+            formattedUnitPrice: `${unitPrice.toFixed(2)} €/${uLabel}`,
+            date: o.last_date || 'Reciente',
+            detailLabel: o.package_qty ? `${o.package_qty} ${o.package_unit || ''}` : '',
+            isMercadona: o.supermarket_id === 'mercadona'
+          });
+        }
+      }
     }
 
-    listEl.innerHTML = ranking.map(item => this.createSupermarketRankingRowHtml(item)).join('');
+    // Re-ordenar por precio unitario
+    ranking.sort((a, b) => a.unitPrice - b.unitPrice);
+    const winner = ranking[0];
+    const medals = ['🥇', '🥈', '🥉'];
+    ranking = ranking.map((item, idx) => {
+      const isWinner = idx === 0;
+      const medal = medals[idx] || `${idx + 1}º`;
+      let diffText = '¡Mejor precio!';
+      if (!isWinner && winner && winner.unitPrice > 0) {
+        const diffPct = Math.round(((item.unitPrice - winner.unitPrice) / winner.unitPrice) * 1000) / 10;
+        diffText = `+${diffPct.toFixed(1)}%`;
+      }
+      return { ...item, rank: idx + 1, medal, isWinner, diffText };
+    });
+
+    let rankingHtml = '';
+    if (ranking.length <= 1) {
+      rankingHtml = `
+        <div style="font-size: 0.84rem; color: var(--text-muted); padding: 0.5rem 0;">
+          Solo tienes registrado el precio de Mercadona (${product.lastPrice.toFixed(2)} €).
+          Cuando registres tickets de <strong>Family Cash, Carrefour, Lidl, etc.</strong> o compares en tienda, aparecerá aquí el ranking completo.
+        </div>
+      `;
+    } else {
+      rankingHtml = ranking.map(item => this.createSupermarketRankingRowHtml(item)).join('');
+    }
+
+    // Bloque para ajustar/vincular la equivalencia canónica entre tiendas
+    const canonicalName = canonical ? canonical.name : product.name;
+    const canonicalOptions = (this.unifiedData?.canonicalProducts || [])
+      .slice(0, 150)
+      .map(c => `<option value="${c.id}" ${canonical && canonical.id === c.id ? 'selected' : ''}>${c.name}</option>`)
+      .join('');
+
+    const canonicalAdjustHtml = `
+      <div style="margin-top: 1rem; padding: 0.75rem 0.9rem; background: var(--bg-surface-subtle); border-radius: var(--radius-md); border: 1px solid var(--border-color); font-size: 0.82rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <span style="color: var(--text-muted); font-size: 0.72rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Concepto Genérico Canónico</span>
+            <div style="font-weight: 700; color: var(--text-primary); margin-top: 0.15rem;">
+              🔗 ${canonicalName}
+            </div>
+          </div>
+          <button class="btn-card-history" id="btn-toggle-canonical-adjust" style="font-size: 0.76rem; padding: 0.3rem 0.6rem;">
+            ✏️ Ajustar
+          </button>
+        </div>
+        <div id="canonical-adjust-drawer" style="display: none; margin-top: 0.75rem; padding-top: 0.65rem; border-top: 1px dashed var(--border-color);">
+          <label style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 0.35rem;">
+            Vincular este producto con otro concepto genérico para comparar entre supermercados:
+          </label>
+          <div style="display: flex; gap: 0.4rem;">
+            <select id="select-canonical-target" class="mini-unit-select" style="flex: 1; font-size: 0.8rem; padding: 0.4rem;">
+              ${canonicalOptions}
+            </select>
+            <button class="btn-primary-mini" id="btn-save-canonical-adjust">Guardar</button>
+          </div>
+          <div id="canonical-adjust-feedback" style="display: none; font-size: 0.75rem; margin-top: 0.4rem; color: var(--success); font-weight: 600;"></div>
+        </div>
+      </div>
+    `;
+
+    listEl.innerHTML = rankingHtml + canonicalAdjustHtml;
+
+    // Listeners del bloque de ajuste canónico
+    const toggleBtn = document.getElementById('btn-toggle-canonical-adjust');
+    const drawer = document.getElementById('canonical-adjust-drawer');
+    const saveBtn = document.getElementById('btn-save-canonical-adjust');
+    const select = document.getElementById('select-canonical-target');
+    const feedback = document.getElementById('canonical-adjust-feedback');
+
+    if (toggleBtn && drawer) {
+      toggleBtn.onclick = () => {
+        drawer.style.display = drawer.style.display === 'none' ? 'block' : 'none';
+      };
+    }
+
+    if (saveBtn && select) {
+      saveBtn.onclick = async () => {
+        const targetId = select.value;
+        const matchingStoreProd = (this.unifiedData?.storeProducts || []).find(sp => 
+          sp.ticket_name === product.name || sp.display_name === product.name
+        );
+        if (matchingStoreProd) {
+          matchingStoreProd.canonical_product_id = targetId;
+          await this.supabase.reassignStoreProductCanonical(matchingStoreProd.id, targetId);
+        }
+        if (feedback) {
+          feedback.style.display = 'block';
+          feedback.textContent = '✅ Relación canónica actualizada correctamente.';
+        }
+        setTimeout(() => {
+          this.renderModalSupermarketRanking(product);
+          this.renderProductsList();
+        }, 800);
+      };
+    }
   }
 
   closeProductModal() {
@@ -1915,6 +2107,618 @@ class MercadonaApp {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  }
+
+  /* ========================================================================
+     MULTI-TIENDA: CARGA DE DATOS UNIFICADOS Y EQUIVALENCIAS CANÓNICAS
+     ======================================================================== */
+  async loadUnifiedData() {
+    // 1. Cargar desde localStorage para arranque inmediato (0ms)
+    try {
+      const cached = localStorage.getItem('mercadona_unified_cache');
+      if (cached) {
+        this.unifiedData = JSON.parse(cached);
+        this.optimizer.setData(this.unifiedData);
+      }
+    } catch (e) {
+      console.warn('Error leyendo unified cache:', e);
+    }
+
+    // 2. Cargar desde data/productos_unificados.json
+    try {
+      const resp = await fetch('data/productos_unificados.json?t=' + Date.now());
+      if (resp.ok) {
+        const json = await resp.json();
+        if (json.supermarkets && json.canonicalProducts) {
+          this.unifiedData = json;
+          this.optimizer.setData(this.unifiedData);
+          localStorage.setItem('mercadona_unified_cache', JSON.stringify(this.unifiedData));
+        }
+      }
+    } catch (e) {
+      console.warn('Error cargando data/productos_unificados.json:', e);
+    }
+
+    // 3. Sincronización asíncrona en segundo plano con Supabase PostgreSQL
+    setTimeout(async () => {
+      try {
+        const [sups, canon, stores] = await Promise.all([
+          this.supabase.getSupermarkets(),
+          this.supabase.getCanonicalProducts(),
+          this.supabase.getStoreProducts()
+        ]);
+        if (sups.length > 0 && canon.length > 0 && stores.length > 0) {
+          this.unifiedData = {
+            supermarkets: sups,
+            canonicalProducts: canon,
+            storeProducts: stores
+          };
+          this.optimizer.setData(this.unifiedData);
+          localStorage.setItem('mercadona_unified_cache', JSON.stringify(this.unifiedData));
+          this.renderStoreFilterChips();
+        }
+      } catch (err) {
+        console.log('Supabase sync completada.');
+      }
+    }, 400);
+  }
+
+  async loadShoppingList() {
+    try {
+      this.shoppingList = await this.supabase.getShoppingList();
+    } catch (e) {
+      console.warn('Error cargando lista de la compra:', e);
+      this.shoppingList = [];
+    }
+  }
+
+  getCanonicalForProduct(product) {
+    if (!product) return null;
+    const slug = product.id || (product.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    if (this.optimizer.canonicalProducts.has(slug)) {
+      return this.optimizer.canonicalProducts.get(slug);
+    }
+    const pName = (product.name || '').toUpperCase().trim();
+    const dName = this.getDisplayName(product).toUpperCase().trim();
+    const found = Array.from(this.optimizer.canonicalProducts.values()).find(c => {
+      const cUpper = c.name.toUpperCase().trim();
+      return cUpper === pName || cUpper === dName || slug.includes(c.id) || c.id.includes(slug);
+    });
+    return found || null;
+  }
+
+  getOffersForProduct(product) {
+    const canonical = this.getCanonicalForProduct(product);
+    if (!canonical) return [];
+    return this.optimizer.getStoreOffersForCanonical(canonical.id);
+  }
+
+  /* ========================================================================
+     SUBMENÚS DE TIENDA EN CATÁLOGO Y TENDENCIAS
+     ======================================================================== */
+  renderStoreFilterChips() {
+    const catalogContainer = document.getElementById('catalog-store-chips');
+    const trendsContainer = document.getElementById('trends-store-chips');
+    const supermarkets = this.unifiedData?.supermarkets || [];
+
+    const storeList = [
+      { id: 'all', name: 'Todas las Tiendas', icon: '🌐', color: 'var(--primary)' },
+      ...supermarkets
+    ];
+
+    if (catalogContainer) {
+      catalogContainer.innerHTML = storeList.map(s => `
+        <button 
+          class="store-chip ${this.selectedStoreFilter === s.id ? 'active' : ''}" 
+          data-store="${s.id}"
+          title="Ver productos de ${s.name}"
+        >
+          <span>${s.icon || '🏪'}</span>
+          <span>${s.name}</span>
+        </button>
+      `).join('');
+
+      catalogContainer.querySelectorAll('.store-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          this.selectedStoreFilter = chip.getAttribute('data-store');
+          catalogContainer.querySelectorAll('.store-chip').forEach(c => c.classList.remove('active'));
+          chip.classList.add('active');
+          this.renderProductsList();
+        });
+      });
+    }
+
+    if (trendsContainer) {
+      trendsContainer.innerHTML = storeList.map(s => `
+        <button 
+          class="store-chip ${this.trendsStoreFilter === s.id ? 'active' : ''}" 
+          data-store="${s.id}"
+          title="Ver tendencias de ${s.name}"
+        >
+          <span>${s.icon || '🏪'}</span>
+          <span>${s.name}</span>
+        </button>
+      `).join('');
+
+      trendsContainer.querySelectorAll('.store-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          this.trendsStoreFilter = chip.getAttribute('data-store');
+          trendsContainer.querySelectorAll('.store-chip').forEach(c => c.classList.remove('active'));
+          chip.classList.add('active');
+          this.renderTrendsView();
+        });
+      });
+    }
+  }
+
+  /* ========================================================================
+     ORGANIZADOR DE LA COMPRA & CARRO OPTIMIZADO
+     ======================================================================== */
+  setupOptimizerEvents() {
+    const searchInput = document.getElementById('optimizer-search-input');
+    const dropdown = document.getElementById('optimizer-search-dropdown');
+    const minusBtn = document.getElementById('optimizer-qty-minus');
+    const plusBtn = document.getElementById('optimizer-qty-plus');
+    const qtyInput = document.getElementById('optimizer-qty-input');
+    const addBtn = document.getElementById('btn-add-to-shopping-list');
+    const clearBtn = document.getElementById('btn-clear-optimizer-list');
+    const syncBtn = document.getElementById('btn-sync-optimizer');
+
+    // Autocomplete buscador
+    if (searchInput && dropdown) {
+      searchInput.addEventListener('input', (e) => {
+        const q = e.target.value.trim().toUpperCase();
+        if (q.length < 2) {
+          dropdown.style.display = 'none';
+          this.optimizerSearchSelected = null;
+          return;
+        }
+
+        const canonList = Array.from(this.optimizer.canonicalProducts.values());
+        const matches = canonList.filter(c => {
+          const cName = c.name.toUpperCase();
+          return cName.includes(q);
+        }).slice(0, 8);
+
+        if (matches.length === 0) {
+          dropdown.style.display = 'none';
+          return;
+        }
+
+        dropdown.style.display = 'block';
+        dropdown.innerHTML = matches.map(c => {
+          const offers = this.optimizer.getStoreOffersForCanonical(c.id);
+          let priceHtml = '';
+          if (offers.length > 0) {
+            const best = [...offers].sort((a, b) => a.last_price - b.last_price)[0];
+            const supMeta = (this.unifiedData?.supermarkets || []).find(s => s.id === best.supermarket_id);
+            priceHtml = `
+              <span style="font-weight: 800; color: var(--primary); font-size: 0.92rem;">${best.last_price.toFixed(2)} €</span>
+              <span style="font-size: 0.72rem; color: var(--text-muted); margin-left: 0.25rem;">(${supMeta?.name || best.supermarket_id})</span>
+            `;
+          }
+          return `
+            <div class="optimizer-dropdown-item" data-id="${c.id}">
+              <div>
+                <strong style="display: block; font-size: 0.88rem; color: var(--text-primary);">${c.name}</strong>
+                <span style="font-size: 0.75rem; color: var(--text-muted);">${c.category_id || 'Básico'}</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <div>${priceHtml}</div>
+                <button class="btn-primary-mini add-now-btn" data-id="${c.id}" style="padding: 0.25rem 0.55rem; font-size: 0.76rem;">+ Añadir</button>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        dropdown.querySelectorAll('.optimizer-dropdown-item').forEach(item => {
+          item.addEventListener('click', async (evt) => {
+            const cid = item.getAttribute('data-id');
+            const canonical = this.optimizer.canonicalProducts.get(cid);
+            if (!canonical) return;
+
+            if (evt.target.classList.contains('add-now-btn')) {
+              evt.stopPropagation();
+              const qVal = Math.max(1, parseFloat(qtyInput?.value || 1));
+              await this.addShoppingItem(canonical.id, qVal);
+              searchInput.value = '';
+              dropdown.style.display = 'none';
+              this.optimizerSearchSelected = null;
+              return;
+            }
+
+            this.optimizerSearchSelected = canonical;
+            searchInput.value = canonical.name;
+            dropdown.style.display = 'none';
+          });
+        });
+      });
+
+      // Cerrar dropdown al hacer click fuera
+      document.addEventListener('click', (e) => {
+        if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+          dropdown.style.display = 'none';
+        }
+      });
+    }
+
+    // Selector de cantidad (+ y -)
+    minusBtn?.addEventListener('click', () => {
+      if (qtyInput) {
+        qtyInput.value = Math.max(1, (parseInt(qtyInput.value, 10) || 1) - 1);
+      }
+    });
+
+    plusBtn?.addEventListener('click', () => {
+      if (qtyInput) {
+        qtyInput.value = (parseInt(qtyInput.value, 10) || 1) + 1;
+      }
+    });
+
+    // Botón "➕ Añadir"
+    addBtn?.addEventListener('click', async () => {
+      const qVal = Math.max(1, parseFloat(qtyInput?.value || 1));
+      if (this.optimizerSearchSelected) {
+        await this.addShoppingItem(this.optimizerSearchSelected.id, qVal);
+        searchInput.value = '';
+        this.optimizerSearchSelected = null;
+        if (qtyInput) qtyInput.value = '1';
+        return;
+      }
+
+      const text = searchInput?.value.trim().toUpperCase();
+      if (!text) return;
+
+      const canonList = Array.from(this.optimizer.canonicalProducts.values());
+      const match = canonList.find(c => c.name.toUpperCase().includes(text) || text.includes(c.name.toUpperCase())) || canonList[0];
+      if (match) {
+        await this.addShoppingItem(match.id, qVal);
+        searchInput.value = '';
+        if (qtyInput) qtyInput.value = '1';
+      }
+    });
+
+    // Atajos de Básicos Frecuentes (.quick-basic-pill)
+    document.querySelectorAll('.quick-basic-pill').forEach(pill => {
+      pill.addEventListener('click', async () => {
+        const query = pill.getAttribute('data-query')?.toLowerCase() || '';
+        const canonList = Array.from(this.optimizer.canonicalProducts.values());
+        const match = canonList.find(c => c.id.includes(query) || c.name.toLowerCase().includes(query));
+        if (match) {
+          await this.addShoppingItem(match.id, 1);
+          const origText = pill.innerHTML;
+          pill.innerHTML = '✓ Añadido';
+          pill.style.background = 'var(--primary)';
+          pill.style.color = '#fff';
+          setTimeout(() => {
+            pill.innerHTML = origText;
+            pill.style.background = '';
+            pill.style.color = '';
+          }, 900);
+        }
+      });
+    });
+
+    // Vaciar lista
+    clearBtn?.addEventListener('click', async () => {
+      if (this.shoppingList.length === 0) return;
+      if (confirm('¿Vaciar toda la lista de la compra?')) {
+        this.shoppingList = [];
+        this.renderOptimizerView();
+        await this.supabase.clearShoppingList();
+      }
+    });
+
+    // Sincronizar lista
+    syncBtn?.addEventListener('click', async () => {
+      syncBtn.innerHTML = '<span>⏳</span> Sincronizando...';
+      await this.loadShoppingList();
+      this.renderOptimizerView();
+      setTimeout(() => {
+        syncBtn.innerHTML = '<span>🔄</span> Sincronizar';
+      }, 600);
+    });
+
+    // Probar conexión Supabase en Settings Modal
+    document.getElementById('btn-test-supabase')?.addEventListener('click', async () => {
+      const feedback = document.getElementById('supabase-test-feedback');
+      const badge = document.getElementById('supabase-status-badge');
+      const text = document.getElementById('supabase-status-text');
+
+      if (feedback) {
+        feedback.style.display = 'block';
+        feedback.style.background = 'rgba(14, 165, 233, 0.15)';
+        feedback.style.color = 'var(--primary)';
+        feedback.textContent = '⏳ Comprobando conexión con Supabase PostgreSQL...';
+      }
+
+      try {
+        const ok = await this.supabase.testConnection();
+        if (ok && feedback) {
+          feedback.style.background = 'rgba(16, 185, 129, 0.15)';
+          feedback.style.color = 'var(--success)';
+          feedback.textContent = '✅ ¡Conexión con Supabase exitosa! Base de datos PostgreSQL en la nube activa y sincronizada.';
+          if (badge) badge.textContent = 'ONLINE ✓';
+          if (text) text.textContent = 'Conectado mediante Anon Key pública';
+        }
+      } catch (err) {
+        if (feedback) {
+          feedback.style.background = 'rgba(239, 68, 68, 0.15)';
+          feedback.style.color = 'var(--danger)';
+          feedback.textContent = `❌ Error: ${err.message}`;
+        }
+      }
+    });
+  }
+
+  async addShoppingItem(canonicalId, qty = 1) {
+    if (!canonicalId) return;
+    const existing = this.shoppingList.find(i => i.canonical_product_id === canonicalId);
+    if (existing) {
+      existing.target_quantity = (parseFloat(existing.target_quantity) || 1) + qty;
+      this.renderOptimizerView();
+      await this.supabase.addShoppingListItem(canonicalId, existing.target_quantity);
+      return;
+    }
+
+    const newItem = await this.supabase.addShoppingListItem(canonicalId, qty);
+    this.shoppingList.unshift(newItem);
+    this.renderOptimizerView();
+  }
+
+  renderOptimizerView() {
+    const countBadge = document.getElementById('optimizer-count-badge');
+    const checkedCountEl = document.getElementById('optimizer-checked-count');
+    const listContainer = document.getElementById('optimizer-items-list');
+    const emptyState = document.getElementById('optimizer-empty-state');
+    const heroCard = document.getElementById('optimized-hero-card');
+    const singleStoresCard = document.getElementById('single-stores-card');
+
+    if (!listContainer) return;
+
+    const totalCount = this.shoppingList.length;
+    const checkedCount = this.shoppingList.filter(i => i.checked).length;
+
+    if (countBadge) countBadge.textContent = totalCount;
+    if (checkedCountEl) checkedCountEl.textContent = `${checkedCount} de ${totalCount} comprados`;
+
+    if (totalCount === 0) {
+      if (emptyState) emptyState.style.display = 'block';
+      if (heroCard) heroCard.style.display = 'none';
+      if (singleStoresCard) singleStoresCard.style.display = 'none';
+      listContainer.innerHTML = '';
+      return;
+    }
+
+    if (emptyState) emptyState.style.display = 'none';
+    if (heroCard) heroCard.style.display = 'block';
+    if (singleStoresCard) singleStoresCard.style.display = 'block';
+
+    // 1. Renderizar items de la lista
+    listContainer.innerHTML = this.shoppingList.map(item => {
+      const canonical = this.optimizer.canonicalProducts.get(item.canonical_product_id) || {
+        name: 'Producto en lista',
+        base_unit: 'ud'
+      };
+      const offers = this.optimizer.getStoreOffersForCanonical(item.canonical_product_id);
+      
+      let offersHtml = '';
+      let bestPrice = 0;
+      let bestStoreName = '';
+
+      if (offers.length > 0) {
+        const sorted = [...offers].sort((a, b) => a.last_price - b.last_price);
+        const best = sorted[0];
+        const sup = (this.unifiedData?.supermarkets || []).find(s => s.id === best.supermarket_id);
+        bestPrice = best.last_price;
+        bestStoreName = sup?.name || best.supermarket_id;
+
+        offersHtml = sorted.map(o => {
+          const sMeta = (this.unifiedData?.supermarkets || []).find(s => s.id === o.supermarket_id);
+          const isBest = o === best;
+          return `
+            <span style="display: inline-flex; align-items: center; gap: 0.2rem; font-size: 0.74rem; padding: 0.15rem 0.45rem; border-radius: 4px; background: ${isBest ? (sMeta?.color || '#008b53') : 'var(--bg-surface-elevated)'}; color: ${isBest ? '#fff' : 'var(--text-secondary)'}; font-weight: ${isBest ? '700' : '500'};">
+              ${sMeta?.icon || '🏪'} ${sMeta?.name || o.supermarket_id}: ${o.last_price.toFixed(2)}€
+            </span>
+          `;
+        }).join(' ');
+      } else {
+        offersHtml = '<span style="font-size: 0.74rem; color: var(--text-muted);">Sin precio registrado</span>';
+      }
+
+      const qty = parseFloat(item.target_quantity) || 1;
+      const totalItemCost = bestPrice > 0 ? (bestPrice * qty).toFixed(2) + ' €' : '--';
+
+      return `
+        <div class="shopping-item-row ${item.checked ? 'checked' : ''}" data-id="${item.id}">
+          <div class="shopping-item-left">
+            <input type="checkbox" class="shopping-checkbox" ${item.checked ? 'checked' : ''} data-id="${item.id}" title="Marcar como comprado">
+            <div class="shopping-item-info">
+              <span class="shopping-item-name">${canonical.name}</span>
+              <div class="shopping-item-meta" style="margin-top: 0.2rem; display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center;">
+                ${offersHtml}
+              </div>
+            </div>
+          </div>
+
+          <div class="shopping-item-right">
+            <div class="optimizer-qty-selector" style="transform: scale(0.85); transform-origin: right center;">
+              <button class="qty-btn item-qty-minus" data-id="${item.id}">-</button>
+              <input type="number" class="qty-val-input item-qty-val" data-id="${item.id}" value="${qty}" min="1" step="1">
+              <button class="qty-btn item-qty-plus" data-id="${item.id}">+</button>
+            </div>
+
+            <div class="shopping-item-price-tag">
+              <div class="shopping-item-best-price">${totalItemCost}</div>
+              <div class="shopping-item-best-store">${bestStoreName ? 'Mejor en ' + bestStoreName : ''}</div>
+            </div>
+
+            <button class="btn-delete-item" data-id="${item.id}" title="Eliminar de la lista">🗑️</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Eventos de los items (checkbox, cantidad, borrar)
+    listContainer.querySelectorAll('.shopping-checkbox').forEach(cb => {
+      cb.addEventListener('change', async () => {
+        const id = cb.getAttribute('data-id');
+        const checked = cb.checked;
+        const item = this.shoppingList.find(i => i.id === id);
+        if (item) {
+          item.checked = checked;
+          this.renderOptimizerView();
+          await this.supabase.toggleShoppingListItem(id, checked);
+        }
+      });
+    });
+
+    listContainer.querySelectorAll('.item-qty-minus').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-id');
+        const item = this.shoppingList.find(i => i.id === id);
+        if (item && item.target_quantity > 1) {
+          item.target_quantity -= 1;
+          this.renderOptimizerView();
+          await this.supabase.addShoppingListItem(item.canonical_product_id, item.target_quantity);
+        }
+      });
+    });
+
+    listContainer.querySelectorAll('.item-qty-plus').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-id');
+        const item = this.shoppingList.find(i => i.id === id);
+        if (item) {
+          item.target_quantity = (parseFloat(item.target_quantity) || 1) + 1;
+          this.renderOptimizerView();
+          await this.supabase.addShoppingListItem(item.canonical_product_id, item.target_quantity);
+        }
+      });
+    });
+
+    listContainer.querySelectorAll('.item-qty-val').forEach(input => {
+      input.addEventListener('change', async () => {
+        const id = input.getAttribute('data-id');
+        const item = this.shoppingList.find(i => i.id === id);
+        const val = Math.max(1, parseFloat(input.value) || 1);
+        if (item) {
+          item.target_quantity = val;
+          this.renderOptimizerView();
+          await this.supabase.addShoppingListItem(item.canonical_product_id, val);
+        }
+      });
+    });
+
+    listContainer.querySelectorAll('.btn-delete-item').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-id');
+        this.shoppingList = this.shoppingList.filter(i => i.id !== id);
+        this.renderOptimizerView();
+        await this.supabase.removeShoppingListItem(id);
+      });
+    });
+
+    // 2. Ejecutar cálculo del Carro Optimizado y Totales Monotienda
+    const optRes = this.optimizer.optimize(this.shoppingList);
+    this.renderOptimizationSummary(optRes);
+  }
+
+  renderOptimizationSummary(optRes) {
+    const totalEl = document.getElementById('optimized-total-amount');
+    const storesBadge = document.getElementById('optimized-stores-badge');
+    const savingsBanner = document.getElementById('optimized-savings-banner');
+    const savingsText = document.getElementById('optimized-savings-text');
+    const savingsPct = document.getElementById('optimized-savings-pct');
+    const routeBreakdown = document.getElementById('optimized-route-breakdown');
+    const singleStoresList = document.getElementById('single-stores-list');
+
+    if (!optRes || optRes.isEmpty || !optRes.multiStorePlan) return;
+
+    const plan = optRes.multiStorePlan;
+
+    if (totalEl) totalEl.textContent = `${plan.optimizedTotal.toFixed(2)} €`;
+    if (storesBadge) {
+      storesBadge.textContent = `${plan.storesCount} ${plan.storesCount === 1 ? 'tienda' : 'tiendas'}`;
+    }
+
+    if (savingsBanner) {
+      if (plan.savingsVsBestSingle > 0) {
+        savingsBanner.style.display = 'flex';
+        if (savingsText) {
+          savingsText.textContent = `🎉 Ahorras ${plan.savingsVsBestSingle.toFixed(2)} € (${plan.savingsPct}%)`;
+        }
+        if (savingsPct) {
+          savingsPct.textContent = plan.bestSingleStoreName 
+            ? `vs comprar todo en ${plan.bestSingleStoreName}` 
+            : 'dividiendo tu compra';
+        }
+      } else {
+        savingsBanner.style.display = 'none';
+      }
+    }
+
+    // Ruta óptima por supermercado
+    if (routeBreakdown) {
+      routeBreakdown.innerHTML = plan.storesPlan.map(storeBucket => {
+        const sup = storeBucket.supermarket;
+        const itemsLi = storeBucket.items.map(it => `
+          <li>
+            <span>${it.item.canonical?.name || 'Producto'} (x${it.item.qty})</span>
+            <strong style="color: var(--text-primary);">${it.itemCost.toFixed(2)} €</strong>
+          </li>
+        `).join('');
+
+        return `
+          <div class="route-store-block" style="border-left: 4px solid ${sup.color || 'var(--primary)'};">
+            <div class="route-store-header">
+              <span style="display: flex; align-items: center; gap: 0.35rem; color: ${sup.color || 'var(--text-primary)'};">
+                <span>${sup.icon || '🏪'}</span>
+                <span>${sup.name}</span>
+              </span>
+              <span style="font-size: 0.95rem; font-weight: 800; color: var(--text-primary);">
+                ${storeBucket.subtotal.toFixed(2)} €
+              </span>
+            </div>
+            <ul class="route-store-items-mini">
+              ${itemsLi}
+            </ul>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Estimación Monotienda
+    if (singleStoresList) {
+      singleStoresList.innerHTML = optRes.singleStoreEstimates.map((s, idx) => {
+        const isBest = idx === 0 && s.isComplete;
+        const diffVsOptimized = Math.round((s.totalCost - plan.optimizedTotal) * 100) / 100;
+        const diffHtml = diffVsOptimized > 0
+          ? `<span style="font-size: 0.76rem; color: var(--danger); font-weight: 600;">+${diffVsOptimized.toFixed(2)} €</span>`
+          : `<span style="font-size: 0.76rem; color: var(--success); font-weight: 700;">Óptimo</span>`;
+
+        return `
+          <div class="single-store-item ${isBest ? 'best' : ''}">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span style="font-size: 1.1rem;">${s.supermarket.icon || '🏪'}</span>
+              <div>
+                <strong style="font-size: 0.88rem; color: ${s.supermarket.color || 'var(--text-primary)'};">${s.supermarket.name}</strong>
+                <div style="font-size: 0.74rem; color: var(--text-muted);">
+                  ${s.isComplete ? '✓ Lista completa (todos los productos)' : `⚠️ Solo ${s.availableCount} de ${s.totalItems} productos`}
+                </div>
+              </div>
+            </div>
+
+            <div style="text-align: right;">
+              <div style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary); font-family: var(--font-display);">
+                ${s.totalCost.toFixed(2)} €
+              </div>
+              <div>${diffHtml}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
   }
 }
 

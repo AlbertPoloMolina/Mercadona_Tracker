@@ -2177,3 +2177,586 @@ textarea:focus {
   font-size: 0.72rem;
   color: var(--text-muted);
 }
+
+/* ==========================================================================
+   SUBMENÚ MULTI-TIENDA (CATÁLOGO Y TENDENCIAS)
+   ========================================================================== */
+.supermarket-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.filter-bar-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+.store-filter-chips {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.store-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.store-chip:hover {
+  background: var(--bg-surface-elevated);
+  border-color: var(--border-focus);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+.store-chip.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 139, 83, 0.25);
+}
+
+.store-chip[data-store="family-cash"].active {
+  background: var(--familycash);
+  border-color: var(--familycash);
+  box-shadow: 0 2px 8px rgba(97, 162, 41, 0.3);
+}
+
+.store-chip[data-store="lidl"].active {
+  background: var(--lidl);
+  border-color: var(--lidl);
+  box-shadow: 0 2px 8px rgba(0, 80, 170, 0.3);
+}
+
+.store-chip[data-store="carrefour"].active {
+  background: var(--carrefour);
+  border-color: var(--carrefour);
+  box-shadow: 0 2px 8px rgba(15, 76, 129, 0.3);
+}
+
+.store-chip-count {
+  font-size: 0.72rem;
+  opacity: 0.85;
+  background: rgba(0, 0, 0, 0.1);
+  padding: 0.1rem 0.35rem;
+  border-radius: var(--radius-full);
+}
+
+.store-chip.active .store-chip-count {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* Badge de tienda en las tarjetas del catálogo */
+.card-store-pill {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.18rem 0.48rem;
+  border-radius: var(--radius-full);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: rgba(0, 139, 83, 0.1);
+  color: var(--primary);
+}
+
+.card-store-pill.family-cash {
+  background: rgba(97, 162, 41, 0.12);
+  color: var(--familycash);
+}
+
+.card-store-pill.lidl {
+  background: rgba(0, 80, 170, 0.12);
+  color: var(--lidl);
+}
+
+/* ==========================================================================
+   VISTA: ORGANIZADOR DE LA COMPRA & CARRO OPTIMIZADO
+   ========================================================================== */
+.optimizer-view-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.optimizer-header-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.optimizer-title-group h2 {
+  font-size: 1.4rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.optimizer-title-group p {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+}
+
+.optimizer-actions-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+/* Buscador para añadir productos a la lista */
+.optimizer-add-bar {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  position: relative;
+}
+
+.add-input-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.optimizer-search-wrapper {
+  flex: 1;
+  position: relative;
+}
+
+.optimizer-search-input {
+  width: 100%;
+  padding: 0.75rem 1rem 0.75rem 2.5rem;
+  font-size: 0.95rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-app);
+}
+
+.optimizer-qty-selector {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  overflow: hidden;
+}
+
+.qty-btn {
+  background: var(--bg-surface-elevated);
+  border: none;
+  padding: 0.65rem 0.85rem;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  color: var(--text-primary);
+  transition: background var(--transition-fast);
+}
+
+.qty-btn:hover {
+  background: var(--bg-surface-subtle);
+}
+
+.qty-val-input {
+  width: 48px;
+  text-align: center;
+  border: none;
+  font-weight: 700;
+  font-size: 0.95rem;
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.btn-add-to-list {
+  background: var(--primary);
+  color: #ffffff;
+  border: none;
+  padding: 0.75rem 1.25rem;
+  border-radius: var(--radius-md);
+  font-weight: 700;
+  font-size: 0.92rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.btn-add-to-list:hover {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+}
+
+/* Desplegable de autocompletado en el organizador */
+.optimizer-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  max-height: 280px;
+  overflow-y: auto;
+  z-index: 100;
+  display: none;
+}
+
+.optimizer-dropdown-item {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background var(--transition-fast);
+}
+
+.optimizer-dropdown-item:hover {
+  background: var(--bg-surface-elevated);
+}
+
+/* Atajos de básicos frecuentes */
+.quick-basics-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.quick-basics-label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.quick-basic-pill {
+  padding: 0.25rem 0.6rem;
+  border-radius: var(--radius-full);
+  background: var(--bg-app);
+  border: 1px solid var(--border-color);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.quick-basic-pill:hover {
+  background: var(--primary-light);
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+/* Layout de dos columnas: Lista vs Resumen de Ahorro */
+.optimizer-main-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+/* Columna Izquierda: Lista de la Compra */
+.shopping-list-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+}
+
+.shopping-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.shopping-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.shopping-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 0.85rem;
+  background: var(--bg-app);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+}
+
+.shopping-item-row.checked {
+  opacity: 0.6;
+  background: var(--bg-surface-elevated);
+}
+
+.shopping-item-row.checked .shopping-item-name {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.shopping-item-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+}
+
+.shopping-checkbox {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: var(--primary);
+}
+
+.shopping-item-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.shopping-item-name {
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--text-primary);
+}
+
+.shopping-item-meta {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.shopping-item-right {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.shopping-item-price-tag {
+  text-align: right;
+}
+
+.shopping-item-best-price {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--primary);
+  font-family: var(--font-display);
+}
+
+.shopping-item-best-store {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.btn-delete-item {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.btn-delete-item:hover {
+  color: var(--danger);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* Columna Derecha: Tarjetas de Balance y Optimización */
+.optimizer-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* Banner de Carro Optimizado */
+.optimized-hero-card {
+  background: linear-gradient(135deg, rgba(0, 139, 83, 0.08) 0%, rgba(97, 162, 41, 0.14) 100%);
+  border: 2px solid var(--primary);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  box-shadow: 0 8px 24px rgba(0, 139, 83, 0.12);
+}
+
+.optimized-hero-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.5rem;
+}
+
+.optimized-hero-title {
+  font-size: 0.85rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.optimized-hero-total {
+  font-size: 2.1rem;
+  font-weight: 900;
+  font-family: var(--font-display);
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.optimized-savings-banner {
+  background: var(--success);
+  color: #ffffff;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-md);
+  font-size: 0.84rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.75rem;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+/* Reparto por supermercado en la ruta optimizada */
+.optimized-route-breakdown {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.route-store-block {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.85rem;
+}
+
+.route-store-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.45rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.route-store-items-mini {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.route-store-items-mini li {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px dashed var(--border-color);
+  padding-bottom: 0.2rem;
+}
+
+/* Cuadro de Comparativa Monotienda */
+.single-stores-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+}
+
+.single-stores-card h3 {
+  font-size: 1rem;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.single-stores-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.single-store-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-app);
+}
+
+.single-store-item.best {
+  border-color: var(--primary);
+  background: rgba(0, 139, 83, 0.05);
+}
+
+.single-store-name {
+  font-weight: 700;
+  font-size: 0.88rem;
+}
+
+.single-store-coverage {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+
+.single-store-price {
+  font-weight: 800;
+  font-size: 1rem;
+  font-family: var(--font-display);
+}
+
+/* Responsividad Organizador en Móvil */
+@media (max-width: 850px) {
+  .optimizer-main-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .add-input-row {
+    flex-wrap: wrap;
+  }
+
+  .btn-add-to-list {
+    width: 100%;
+    justify-content: center;
+  }
+}
