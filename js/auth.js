@@ -12,6 +12,20 @@ export class AuthManager {
     this.adminEmails = this.loadAdminEmails();
     this.listeners = [];
     this.initSession();
+    // Procesar enlace de confirmación o Magic Link si viene en la URL
+    this.processAuthHash();
+  }
+
+  normalizeEmail(email) {
+    if (!email) return '';
+    const clean = email.toLowerCase().trim();
+    const parts = clean.split('@');
+    if (parts.length !== 2) return clean;
+    let [user, domain] = parts;
+    if (domain === 'gmail.com' || domain === 'googlemail.com') {
+      user = user.replace(/\./g, '');
+    }
+    return `${user}@${domain}`;
   }
 
   loadAdminEmails() {
@@ -20,9 +34,12 @@ export class AuthManager {
       if (stored) {
         return JSON.parse(stored).map(e => e.toLowerCase().trim());
       }
-    } catch (e) {}
-    // Emails por defecto con permisos de administrador
-    return ['albert@polomolina.com', 'albertpolomolina@gmail.com', 'admin@mercadonatracker.com'];
+    } catch (e) { }
+    // Emails por defecto con permisos de administrador (incluyendo variantes con y sin puntos)
+    return [
+      'albert.polo.molina@gmail.com',
+      'apolomo@uoc.edu'
+    ];
   }
 
   setAdminEmail(email) {
@@ -32,6 +49,62 @@ export class AuthManager {
       this.adminEmails.push(clean);
       localStorage.setItem('mercadona_admin_emails', JSON.stringify(this.adminEmails));
     }
+  }
+
+  /**
+   * Captura y procesa los tokens de Supabase cuando el usuario abre el enlace de correo
+   * Formato: #access_token=...&refresh_token=...&type=signup
+   */
+  processAuthHash() {
+    try {
+      const hash = window.location.hash || '';
+      if (!hash || !hash.includes('access_token=')) return null;
+
+      const params = new URLSearchParams(hash.replace(/^#/, ''));
+      const accessToken = params.get('access_token');
+      const refreshToken = params.get('refresh_token');
+      const expiresIn = params.get('expires_in');
+      const type = params.get('type') || 'login';
+
+      if (accessToken) {
+        let user = null;
+        try {
+          const payloadBase64 = accessToken.split('.')[1];
+          const decodedJson = atob(payloadBase64.replace(/-/g, '+').replace(/_/g, '/'));
+          const payload = JSON.parse(decodedJson);
+          user = {
+            id: payload.sub,
+            email: payload.email,
+            user_metadata: payload.user_metadata || {},
+            app_metadata: payload.app_metadata || {},
+            role: payload.role
+          };
+        } catch (e) {
+          console.warn('No se pudo decodificar el payload JWT localmente:', e);
+        }
+
+        const session = {
+          access_token: accessToken,
+          refresh_token: refreshToken,
+          expires_in: expiresIn ? parseInt(expiresIn, 10) : 3600,
+          token_type: params.get('token_type') || 'bearer',
+          type: type,
+          user: user
+        };
+
+        this.saveSession(session);
+
+        // Limpiar el hash de la URL de forma limpia
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        }
+
+        return { success: true, type, user };
+      }
+    } catch (err) {
+      console.warn('Error procesando fragmento hash de Supabase:', err);
+    }
+    return null;
   }
 
   initSession() {
@@ -64,14 +137,20 @@ export class AuthManager {
 
   isAdmin() {
     if (!this.isAuthenticated()) return false;
-    const email = (this.user.email || '').toLowerCase().trim();
-    // 1. Coincide con la lista de correos administradores
-    if (this.adminEmails.includes(email)) return true;
+    const rawEmail = (this.user.email || '').toLowerCase().trim();
+    const normEmail = this.normalizeEmail(rawEmail);
+
+    // 1. Coincide con la lista de correos administradores (exacto o normalizado para gmail)
+    for (const admin of this.adminEmails) {
+      if (admin === rawEmail || this.normalizeEmail(admin) === normEmail) {
+        return true;
+      }
+    }
     // 2. Metadata del usuario en Supabase
     if (this.user.app_metadata?.role === 'admin' || this.user.user_metadata?.is_admin === true) return true;
-    // 3. Fallback al primer usuario registrado si se configuró
+    // 3. Fallback al custom admin si se configuró
     const customAdmin = localStorage.getItem('mercadona_custom_admin_email');
-    if (customAdmin && customAdmin.toLowerCase().trim() === email) return true;
+    if (customAdmin && this.normalizeEmail(customAdmin) === normEmail) return true;
     return false;
   }
 

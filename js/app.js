@@ -210,12 +210,28 @@ class MercadonaApp {
   checkTokenInUrl() {
     try {
       const hash = window.location.hash || '';
-      if (hash.includes('token=')) {
-        const match = hash.match(/token=([a-zA-Z0-9_\-]+)/);
-        if (match && match[1]) {
-          const newToken = match[1];
+      if (!hash) return;
+
+      // 1. Prioridad: Tokens de autenticación de Supabase (confirmación de cuenta o Magic Link)
+      if (hash.includes('access_token=')) {
+        const authRes = this.auth?.processAuthHash();
+        if (authRes && authRes.success) {
+          const email = authRes.user?.email || '';
+          setTimeout(() => {
+            alert(`🎉 ¡Cuenta confirmada y sesión iniciada con éxito!\nBienvenido/a: ${email}`);
+          }, 400);
+          return;
+        }
+      }
+
+      // 2. Token de sincronización con GitHub API (solo coincidencia explícita con github_token= o gh_token= o #token=)
+      const githubMatch = hash.match(/(?:#|&)(?:github_token|gh_token|token)=([a-zA-Z0-9_\-]+)/);
+      if (githubMatch && githubMatch[1]) {
+        const val = githubMatch[1];
+        // Evitar falsos positivos con parámetros de Supabase (tipo bearer o JWTs que empiezan por ey)
+        if (val !== 'bearer' && !val.startsWith('ey') && val.length > 10) {
           this.githubSync.saveConfig({
-            token: newToken,
+            token: val,
             owner: 'AlbertPoloMolina',
             repo: 'Mercadona_Tracker',
             branch: 'main',
